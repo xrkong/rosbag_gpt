@@ -54,19 +54,25 @@ def convertCsv(folder_path):
                     longitudes.append(longitude)
 
     # Draw one html for all kml
-    html_file_path = folder_path + '/output.html'
-    # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
-    path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
-    op_map = Map(18, html_file_path, path_points)
-    #op_map.showMap()
+    if len(latitudes) == 0:
+        print('No trival detected!')
+    else:   
+        html_file_path = folder_path + '/output.html'
+        # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
+        path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
+        op_map = Map(18, html_file_path, path_points)
+        print('Done!')
+        #op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print('Please provide a path as an argument')
-        #convertCsv('/home/kong/Documents/data')
+        print('Converting CSV in current path')
+        folder_path = os.getcwd()
+        convertCsv(folder_path)
     else:
         folder_path = sys.argv[1]
         if os.path.isdir(folder_path):
+            print('Converting CSV in path ' + folder_path)
             convertCsv(folder_path)
         else :
             print('Please provide a directory path')
