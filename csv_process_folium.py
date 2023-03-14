@@ -58,7 +58,7 @@ def convertCsv(folder_path):
     # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
     path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
     op_map = Map(18, html_file_path, path_points)
-    op_map.showMap()
+    #op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
