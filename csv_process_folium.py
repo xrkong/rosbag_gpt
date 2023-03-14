@@ -1,12 +1,10 @@
 
 # Convert all 'csv' files to 'kml' files, and plot to 'html' files
-# $ sudo apt-get install wkhtmltopdf
 # To get a better view of folium, read https://python-visualization.github.io/folium/
 import os
 import sys
 import pandas as pd
 import numpy as np
-from PIL import Image
 from simplekml import Kml
 import folium
 import webbrowser
@@ -60,7 +58,7 @@ def convertCsv(folder_path):
             # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
             path_points = np.hstack((np.array(latitudes).reshape((10, 1)), np.array(longitudes).reshape((10, 1))))
             op_map = Map(18, html_file_path, path_points)
-            op_map.showMap()
+            #op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
