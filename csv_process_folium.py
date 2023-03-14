@@ -27,6 +27,8 @@ class Map:
 
 # Loop through all the CSV files in the folder
 def convertCsv(folder_path):
+    latitudes = []
+    longitudes = []
     for file_name in os.listdir(folder_path):
         if file_name.endswith('.csv'):
             # Read the CSV file into a pandas DataFrame
@@ -43,8 +45,7 @@ def convertCsv(folder_path):
             # Extract latitude and longitude data from KML file
             with open(kml_file_path, 'r') as f:
                 kml_data = f.read()
-            latitudes = []
-            longitudes = []
+
             for line in kml_data.splitlines():
                 if "<coordinates>" in line:
                     coordinates = line.strip().split(">")[1].split("<")[0]
@@ -52,17 +53,17 @@ def convertCsv(folder_path):
                     latitudes.append(latitude)
                     longitudes.append(longitude)
 
-            # Create Google Maps plot using gmplot
-            html_file_path = os.path.splitext(kml_file_path)[0] + '.html'
-
-            # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
-            path_points = np.hstack((np.array(latitudes).reshape((10, 1)), np.array(longitudes).reshape((10, 1))))
-            op_map = Map(18, html_file_path, path_points)
-            #op_map.showMap()
+    # Draw one html for all kml
+    html_file_path = folder_path + '/output.html'
+    # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
+    path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
+    op_map = Map(18, html_file_path, path_points)
+    op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Please provide a path as an argument')
+        #convertCsv('/home/kong/Documents/data')
     else:
         folder_path = sys.argv[1]
         if os.path.isdir(folder_path):
