@@ -40,7 +40,7 @@ for file_name in os.listdir(FOLDER_PATH):
         kml_file_path = os.path.splitext(csv_file_path)[0] + ".kml"
         kml = Kml()
         for index, row in df.iterrows():
-            kml.newpoint(name=row['time'], coords=[(row['lon'], row['lat'])])
+            kml.newpoint(name=row['time'], coords=[(row['lon'], row['lat'])]) # Change name according to your csv file
         kml.save(kml_file_path)
 
         # Extract latitude and longitude data from KML file
