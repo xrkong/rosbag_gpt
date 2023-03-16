@@ -10,27 +10,28 @@ import folium
 import webbrowser
 
 class Map:
-    def __init__(self, zoom_start, file_path, trail_coordinates):
-        self.center = coords = list(np.mean(trail_coordinates, axis=0))
+    def __init__(self, zoom_start, file_path, trail_coordinates):  
         self.zoom_start = zoom_start
         self.path = trail_coordinates
+        self.pic_center = np.mean(self.path, 0)
         self.file_path = file_path
+        self.map = None
     
-    def showMap(self):
+    def saveMap(self):
         #Create the map
-        my_map = folium.Map(location = self.center, zoom_start = self.zoom_start)
-        folium.PolyLine(self.path).add_to(my_map)
-
-        #Display the map
-        my_map.save(self.file_path)
+        #center = np.mean(self.path, axis=0)
+        self.map = folium.Map(location = self.pic_center, zoom_start = self.zoom_start)
+        folium.PolyLine(self.path).add_to(self.map)
+        self.map.save(self.file_path)
         webbrowser.open(self.file_path)
 
 # Loop through all the CSV files in the folder
 def convertCsv(folder_path):
-    latitudes = []
-    longitudes = []
     for file_name in os.listdir(folder_path):
         if file_name.endswith('.csv'):
+
+            latitudes = []
+            longitudes = []
             # Read the CSV file into a pandas DataFrame
             csv_file_path = os.path.join(folder_path, file_name)
             df = pd.read_csv(csv_file_path)
@@ -53,16 +54,26 @@ def convertCsv(folder_path):
                     latitudes.append(latitude)
                     longitudes.append(longitude)
 
-    # Draw one html for all kml
-    if len(latitudes) == 0:
-        print('No trival detected!')
-    else:   
-        html_file_path = folder_path + '/output.html'
-        # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
-        path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
-        op_map = Map(18, html_file_path, path_points)
-        print('Done!')
-        #op_map.showMap()
+            if len(latitudes) == 0:
+                print('No trival detected!')
+            else:   
+                html_file_path = os.path.splitext(csv_file_path)[0] + '.html'
+                # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
+                path_points = np.vstack((latitudes, longitudes)).T
+                op_map = Map(17, html_file_path, path_points)
+                print('Done!')
+                op_map.saveMap()
+
+    # # Draw one html for all kml
+    # if len(latitudes) == 0:
+    #     print('No trival detected!')
+    # else:   
+    #     html_file_path = folder_path + '/output.html'
+    #     # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
+    #     path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
+    #     op_map = Map(18, html_file_path, path_points)
+    #     print('Done!')
+    #     #op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
