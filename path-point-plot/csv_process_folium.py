@@ -8,6 +8,7 @@ import numpy as np
 from simplekml import Kml
 import folium
 import webbrowser
+import math
 
 class Map:
     def __init__(self, zoom_start, file_path, trail_coordinates):  
@@ -21,7 +22,9 @@ class Map:
         #Create the map
         #center = np.mean(self.path, axis=0)
         self.map = folium.Map(location = self.pic_center, zoom_start = self.zoom_start)
-        folium.PolyLine(self.path).add_to(self.map)
+        for i in range(len(self.path)-2):
+            if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
+                folium.PolyLine(self.path[i:i+2]).add_to(self.map)
         self.map.save(self.file_path)
         webbrowser.open(self.file_path)
 
@@ -63,17 +66,6 @@ def convertCsv(folder_path):
                 op_map = Map(17, html_file_path, path_points)
                 print('Done!')
                 op_map.saveMap()
-
-    # # Draw one html for all kml
-    # if len(latitudes) == 0:
-    #     print('No trival detected!')
-    # else:   
-    #     html_file_path = folder_path + '/output.html'
-    #     # Convert the lists into NumPy arrays and stack them horizontally to create a 10x2 matrix
-    #     path_points = np.hstack((np.array(latitudes).reshape((len(latitudes), 1)), np.array(longitudes).reshape((len(longitudes), 1))))
-    #     op_map = Map(18, html_file_path, path_points)
-    #     print('Done!')
-    #     #op_map.showMap()
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
