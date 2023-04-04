@@ -41,8 +41,8 @@ class BagFileParser():
     def get_msg_frame(self, topic_name, timestamp):
         topic_id = self.topic_id[topic_name]
         try:
-            rows = self.cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = {} AND ABS(timestamp - {}) < 1E10".format(topic_id, timestamp)).fetchall()
-            return (rows[0][0], deserialize_message(rows[0][1], self.topic_msg_message[topic_name])) # get the middle data from rows.# round(len(rows)/2)
+            rows = self.cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = {} AND ABS(timestamp - {}) < 5E8".format(topic_id, timestamp)).fetchall()
+            return (rows[round(len(rows)/2)][0], deserialize_message(rows[round(len(rows)/2)][1], self.topic_msg_message[topic_name])) # get the middle data from rows.# round(len(rows)/2)
         except TypeError as e:
             print(f"Error: {e}")
             return None
@@ -63,6 +63,7 @@ class Frame():
             self.gps_pos = parser.get_msg_frame("/ins0/gps_pos", timestamp) # gps_pos[ts][1].position.SLOT_TYPES.x
             self.gps_vel = parser.get_msg_frame("/sbg/gps_vel", timestamp)
             self.print_msg_timestamp()
+            self.print_bus_status()
         except TypeError as e:
             print(f"Error: {e}")
             return None
@@ -92,6 +93,12 @@ class Frame():
         self.print_time(ori, "ori")
         self.print_time(gps_pos, "gps_pos")
         self.print_time(gps_vel, "gps_vel")
+
+    def print_bus_status(self):
+        ori=self.ori[1].angle.x
+        gps_pos=self.gps_pos[1].position#x,y,z
+        gps_vel=self.gps_vel[1].vel #x,y,z
+        print("ori:{:.1f}, lat:{:.7f}, lon:{:.7f}, vel:{:.3f}".format(math.degrees(ori), gps_pos.x, gps_pos.y, gps_vel.x))
 
     def plot_lidar(self):
         fig, axs = plt.subplots(2, 2, figsize=(10, 10), subplot_kw=dict(projection='polar'))
