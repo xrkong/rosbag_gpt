@@ -1,4 +1,3 @@
-
 # Convert all 'csv' files to 'kml' files, and plot to 'html' files
 # To get a better view of folium, read https://python-visualization.github.io/folium/
 import os
