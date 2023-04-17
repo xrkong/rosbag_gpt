@@ -3,7 +3,6 @@ from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import LaserScan
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 import random
@@ -67,8 +66,25 @@ class Frame():
         except TypeError as e:
             print(f"Error: {e}")
             return None
-
-    def print_time(self, timestamp, name:str):
+    
+    def plot_all(self):
+        '''
+        (TODO) plot all information that frame obj has. 
+        If any data is empty, ignore it.
+        - print_msg_timestamp
+        - plot bus status using icon
+        - plot lidar_safety
+        - plot camera
+        '''
+        pass
+        
+    def save_frame(self, abs_path:str):
+        '''
+        (TODO) save image and data as a file
+        '''
+        pass
+    
+    def print_time(self, timestamp, name:str): 
         try:
             secs = timestamp.sec + timestamp.nanosec / 1e9
             dt = datetime.datetime.utcfromtimestamp(secs)
@@ -148,13 +164,22 @@ class Frame():
         fig.suptitle(time_str)
         plt.show()
         plt.pause(0.01)
+    
+    def plot_camera(self):
+        '''
+        (TODO) use try-exception to plot camera front and rear if they exist.
+        
+        
+        '''
+        pass
 
 if __name__ == "__main__":
-
+    # (TODO) input rosbag as an argument
     bag_file = '/home/kong/ws/rosbag2_2023_03_22-10_13_05/rosbag2_2023_03_22-10_13_05_0.db3'
     parser = BagFileParser(bag_file)
 
     # choose a topic as a time line and get a timestamp at topic_list[index][0]
+    # (TODO) add function to support input a time like (MM-DD-hh:mm:ss)
     scan_list = parser.get_messages("/lidar_safety/front_left/scan")
 
     test = Frame(parser, scan_list[1000][0])
