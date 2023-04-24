@@ -16,3 +16,8 @@ plot a 3*2 subfig should look like this.
 
 plot the bus icon on another plot considering orientation
 
+Not all the function only support .db3 file   
+Since we change the storge format into mcap   
+It is better to use .mcap as a ros2bag format.   
+
+(TODO) Support .mcap file format
