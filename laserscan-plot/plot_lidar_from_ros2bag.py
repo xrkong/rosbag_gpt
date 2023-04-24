@@ -49,6 +49,22 @@ class BagFileParser():
         # Deserialise all and timestamp them
 
 '''
+Load mcap file 
+'''
+class McapFilePaser():
+    def __init__(self, file) -> None:
+        pass
+
+    def __del__(self):
+        pass
+    
+    def get_messages(self, topic_name):
+        pass
+
+    def get_msg_frame(self, topic_name, timestamp):
+        pass
+
+'''
 data frame from a parser
 '''
 class Frame():
