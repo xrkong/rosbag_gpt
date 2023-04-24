@@ -12,9 +12,37 @@ import math
 import os
 
 '''
-Load ros2bag file 
+Ros2bag file parser factory class
 '''
-class BagFileParser():
+class BagFileParserFactory():
+    def __init__(self, bag_file:str): 
+        self.bag_file = bag_file
+        self.parser = None
+        self.file_type = None
+        self.file_type = self.get_file_type()
+        print("start parsing...")
+        if self.file_type == "db3":
+            self.parser = db3Parser(self.bag_file)
+        elif self.file_type == "mcap":
+            self.parser = mcapParser(self.bag_file)
+        print("parsing done")
+    
+    def get_file_type(self):
+        if self.bag_file.split(".")[-1]=="db3":
+            return "db3"
+        elif self.bag_file.split(".")[-1]=="mcap":
+            return "mcap"
+        else:
+            print("Error: unknown file type")
+            exit(1)
+    
+    def get_parser(self):
+        return self.parser
+
+'''
+Load .db3 ros2bag file 
+'''
+class db3Parser():
     def __init__(self, bag_file):
         self.conn = sqlite3.connect(bag_file)
         self.cursor = self.conn.cursor()
@@ -48,9 +76,9 @@ class BagFileParser():
         # Deserialise all and timestamp them
 
 '''
-Load mcap file 
+Load .mcap ros2bag file 
 '''
-class McapFilePaser():
+class mcapParser():
     def __init__(self, file) -> None:
         pass
 
@@ -85,7 +113,7 @@ class Frame():
     
     def plot_all(self):
         '''
-        (TODO) plot all information that frame obj has. 
+        TODO:  plot all information that frame obj has. 
         If any data is empty, ignore it.
         - print_msg_timestamp
         - plot bus status using icon
@@ -96,7 +124,7 @@ class Frame():
         
     def save_frame(self, abs_path:str):
         '''
-        (TODO) save image and data as a file
+        TODO: save image and data as a file
         '''
         pass
     
@@ -183,20 +211,22 @@ class Frame():
     
     def plot_camera(self):
         '''
-        (TODO) use try-exception to plot camera front and rear if they exist.
+        TODO: use try-exception to plot camera front and rear if they exist.
         
         
         '''
         pass
 
 if __name__ == "__main__":
-    # (TODO) input rosbag as an argument
-    bag_file = '/home/kong/ws/rosbag2_2023_03_22-10_13_05/rosbag2_2023_03_22-10_13_05_0.db3'
-    parser = BagFileParser(bag_file)
+    # TODO: input rosbag as an argument
+    bag_file = '/home/kong/my_ws/rosbag2_2023_03_22-10_13_05/rosbag2_2023_03_22-10_13_05_0.db3'
+    parser = BagFileParserFactory(bag_file).get_parser()
 
     # choose a topic as a time line and get a timestamp at topic_list[index][0]
-    # (TODO) add function to support input a time like (MM-DD-hh:mm:ss)
+    # TODO: add function to support input a time like (MM-DD-hh:mm:ss)
+    print("start getting msg...")
     scan_list = parser.get_messages("/lidar_safety/front_left/scan")
+    print("finish getting msg...")
 
     test = Frame(parser, scan_list[1000][0])
     test.plot_lidar()

@@ -2,7 +2,7 @@ In order to plot a set of laserscan at a time from a big rosbag file (or db3 fil
 
 - [x] Deserialize from ros2 bag, (.db3 file)
 - [x] Get data, like /lidar_safety/front_left/scan, /ins0/gps_pos, /ins0/orientation
-- [ ] Plot them
+- [x] Plot them
 - [ ] If there is a icon of the vechicle, add into a middile.
 - [ ] plot map
 
