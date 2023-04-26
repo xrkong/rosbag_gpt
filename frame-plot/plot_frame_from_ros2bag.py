@@ -14,6 +14,10 @@ from PIL import Image
 import datetime
 import math
 import os
+from io import BytesIO
+import folium
+import webbrowser
+import base64
 
 '''
 Ros2bag file parser factory class
@@ -120,10 +124,16 @@ class Frame():
     def __init__(self, parser, timestamp) -> None:
         try: 
             self.timestamp = timestamp
-            self.scan_fl = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
-            self.scan_fr = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
-            self.scan_rl = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
-            self.scan_rr = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
+            # Right priority
+            # self.scan_fl = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
+            # self.scan_fr = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
+            # self.scan_rl = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
+            # self.scan_rr = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
+            # Left priority
+            self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
+            self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
+            self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
+            self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
             self.cam_front = parser.get_msg_frame("/CameraFront", timestamp)
             self.cam_rear  = parser.get_msg_frame("/CameraRear", timestamp)
             self.ori = parser.get_msg_frame("/ins0/orientation", timestamp) #ori[times]
@@ -141,6 +151,7 @@ class Frame():
         '''
         TODO: save image and data as a file
         '''
+        dpi_size = 1500
         fl = self.scan_fl[1]
         fr = self.scan_fr[1]
         rl = self.scan_rl[1]
@@ -155,10 +166,11 @@ class Frame():
         # Fill the area enclosed by the line
         axs.fill(theta, r, alpha=0.7) # fill area
         axs.set_theta_zero_location('NW') 
+        axs.set_theta_direction(-1) # clockwise axis Z is down
         plt.axis('off')
         if not os.path.exists(abs_path):
             os.makedirs(abs_path)         
-        plt.savefig(abs_path+'lidar_safety_fl.png', dpi=300, bbox_inches='tight', transparent=True)
+        plt.savefig(abs_path+'lidar_safety_fl.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
         fig.clf()
 
         r = [x/ 10 for x in fr._ranges ]
@@ -167,8 +179,9 @@ class Frame():
         axs.plot(theta, r, linewidth=0) # no line
         axs.fill(theta, r, alpha=0.7) # fill area
         axs.set_theta_zero_location('NE')
+        axs.set_theta_direction(-1) # clockwise axis Z is down
         plt.axis('off')       
-        plt.savefig(abs_path+'lidar_safety_fr.png', dpi=300, bbox_inches='tight', transparent=True)
+        plt.savefig(abs_path+'lidar_safety_fr.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
         fig.clf()
 
         r = [x/ 10 for x in rl._ranges ]
@@ -177,8 +190,9 @@ class Frame():
         axs.plot(theta, r, linewidth=0) # no line
         axs.fill(theta, r, alpha=0.7) # fill area
         axs.set_theta_zero_location('SW')
+        axs.set_theta_direction(-1) # clockwise axis Z is down
         plt.axis('off')
-        plt.savefig(abs_path+'lidar_safety_rl.png', dpi=300, bbox_inches='tight', transparent=True)
+        plt.savefig(abs_path+'lidar_safety_rl.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
         fig.clf()
 
         r = [x/ 10 for x in rr._ranges ]
@@ -187,8 +201,10 @@ class Frame():
         axs.plot(theta, r, linewidth=0) # no line
         axs.fill(theta, r, alpha=0.7) # fill area
         axs.set_theta_zero_location('SE')
+        axs.set_theta_direction(-1) # clockwise axis Z is down
         plt.axis('off')
-        plt.savefig(abs_path+'lidar_safety_rr.png', dpi=300, bbox_inches='tight', transparent=True)
+        plt.savefig(abs_path+'lidar_safety_rr.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
+        return abs_path
     
     def print_time(self, timestamp, name:str): 
         try:
@@ -220,7 +236,7 @@ class Frame():
         ori=self.ori[1].angle.x
         gps_pos=self.gps_pos[1].position#x,y,z
         gps_vel=self.gps_vel[1].vel #x,y,z
-        print("ori:{:.1f}, lat:{:.7f}, lon:{:.7f}, vel:{:.3f}".format(math.degrees(ori), gps_pos.x, gps_pos.y, gps_vel.x))
+        print("ori:{:.7f}, lat:{:.7f}, lon:{:.7f}, vel:{:.3f}".format(math.degrees(ori), gps_pos.x, gps_pos.y, gps_vel.x))
 
     def plot_all(self):
         #fig, axs = plt.subplots(2, 3, figsize=(10, 10), subplot_kw=dict(polar=True))
@@ -282,60 +298,109 @@ class Frame():
             cv_img_front = bridge.imgmsg_to_cv2(self.cam_front[1], desired_encoding='passthrough')
             img_front = cv2.cvtColor(cv_img_front, cv2.COLOR_BGR2RGB)
             axs = fig.add_subplot(2, 3, 2)
-            axs.cla()
+            axs.set_title('Camera Front', fontweight='bold')
+            axs.axis('off')
             axs.imshow(img_front)
+        else:
+            print("No front camera data")
             
         if self.cam_rear is not None:
             cv_img_rear = bridge.imgmsg_to_cv2(self.cam_rear[1], desired_encoding='passthrough')
             img_rear = cv2.cvtColor(cv_img_rear, cv2.COLOR_BGR2RGB)
             axs = fig.add_subplot(2, 3, 5)
-            axs.cla()
+            axs.set_title('Camera Rear', fontweight='bold')
+            axs.axis('off')
             axs.imshow(img_rear)
+        else:
+            print("No rear camera data")
+            
         fig.suptitle(self.time_str)
         plt.savefig('plot_'+self.time_str+'.png', dpi=300, bbox_inches='tight')
         plt.show()
 
 '''
 Map class
-[ ] Get all path point based on rosbag
-[ ] Get a frame data from Frame class
-[ ] Attach lidar images with a bus icon ori = 0, save as a new image
-[ ] Add a bus icon based on the frame data with a given oriention
+[x] Get all path point based on rosbag
+[x] Get a frame data from Frame class
+[x] Attach lidar images with a bus icon ori = 0, save as a new image
+[x] Add a bus icon based on the frame data with a given oriention
 '''
 class Map:
-    def  __init__(self):
-        self.path = None
+    def __init__(self, zoom_start, file_path, trail_coordinates, bus_frame:Frame):  
+        self.zoom_start = zoom_start
+        if trail_coordinates is not None:
+            self.path = trail_coordinates
+        elif bus_frame is not None:
+            self.path = [[bus_frame.gps_pos[1].position.x, bus_frame.gps_pos[1].position.y]]
+        self.pic_center = np.mean(self.path, 0)
+        self.file_path = file_path
+        self.map = folium.Map(location = self.pic_center, zoom_start = self.zoom_start)
+        self.frame = bus_frame
     
     def draw_bus_lidar(self, lidar_path:str):
+        oritation = self.frame.ori[1].angle.z
+        gps_pos = [self.frame.gps_pos[1].position.x, self.frame.gps_pos[1].position.y]
         bus =Image.open(os.path.dirname(os.path.abspath(__file__))+"/bus.png").convert("RGBA")
-        lidar_img = {"fl":Image.open(lidar_path+"lidar_safety_fl.png").convert("RGBA").rotate(90), 
-                     "fr":Image.open(lidar_path+"lidar_safety_fr.png").convert("RGBA").rotate(90),
-                     "rl":Image.open(lidar_path+"lidar_safety_rl.png").convert("RGBA").rotate(90),
-                     "rr":Image.open(lidar_path+"lidar_safety_rr.png").convert("RGBA").rotate(90)}
-        bus_w, bus_h = bus.size #w1072 h1500
-        lidar_w, lidar_h = lidar_img["fl"].size #h1168 w1168
-        bus.paste(lidar_img["fl"], (0, 0), lidar_img["fl"])
-        # bus.paste(lidar_img["fr"], ((bus_w-lidar_w)//2, 0), lidar_img["fr"])
-        # bus.paste(lidar_img["rl"], (0, (bus_h-lidar_w)), lidar_img["rl"])
-        # bus.paste(lidar_img["rr"], ((bus_w), (bus_h-lidar_h)), lidar_img["rr"])
-        bus.save("demo.png")
-        
+        bus_w, bus_h = bus.size 
 
-    def draw_path(self, path):
-        pass
-
-    def draw_frame(self, frame:Frame):
-        pass
+        lidar_img = {"fl":Image.open(lidar_path+"lidar_safety_fl.png").convert("RGBA"), 
+                     "fr":Image.open(lidar_path+"lidar_safety_fr.png").convert("RGBA"),
+                     "rl":Image.open(lidar_path+"lidar_safety_rl.png").convert("RGBA"),
+                     "rr":Image.open(lidar_path+"lidar_safety_rr.png").convert("RGBA")}
+        lidar_w, lidar_h = lidar_img["fl"].size 
         
+        bus_lidar = {"fl":(2720, 2490), "fr":(3220, 2490), "rl":(2720, 3450), "rr":(3220, 3450)}
+
+        bus.paste(lidar_img["fl"], (bus_lidar["fl"][0]-lidar_w//2, bus_lidar["fl"][1]-lidar_h//2), lidar_img["fl"])
+        bus.paste(lidar_img["fr"], (bus_lidar["fr"][0]-lidar_w//2, bus_lidar["fr"][1]-lidar_h//2), lidar_img["fr"])
+        bus.paste(lidar_img["rl"], (bus_lidar["rl"][0]-lidar_w//2, bus_lidar["rl"][1]-lidar_h//2), lidar_img["rl"])
+        bus.paste(lidar_img["rr"], (bus_lidar["rr"][0]-lidar_w//2, bus_lidar["rr"][1]-lidar_h//2), lidar_img["rr"])
+
+        bus.save("demo.png") # save the original bus image
+        bus = bus.rotate((oritation)/math.pi*180).save("demo-ori.png")
+        if gps_pos is not None:
+            self.pic_center = gps_pos
+        # else: self.pic_center at UWA
+
+        icon_path = os.path.join(os.getcwd(),"demo-ori.png")
+        icon = folium.features.CustomIcon(icon_image=icon_path ,icon_size=(bus_w//20, bus_h//20))
+        folium.Marker(gps_pos, icon=icon).add_to(self.map)
+
+    def draw_path(self):
+        if self.map is not None and self.path is not None:
+            self.pic_center = np.mean(self.path, 0)
+            for i in range(len(self.path)-2):
+                if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
+                    folium.PolyLine(self.path[i:i+2]).add_to(self.map)
+        else:
+            print("No path data")
+
+    def show_map(self):
+        self.map.save(self.file_path)
+        webbrowser.open(self.file_path)
+
+
+'''
+[ ] Read rosbag, timestamp from arguments
+[ ] change files name and path
+[ ] Readme.md
+'''
 
 if __name__ == "__main__":
     parser = mcapParser("/home/kong/Documents/rosbag2.mcap")
-    # gps_list = parser.get_messages("/ins0/gps_pos")
 
-    test = Frame(parser, 1681451133151763439) #gps_list[1000][0])
+    test = Frame(parser, 1681451854074038952) #gps_list[1000][0])
     test.plot_all()
-    test.save_frame("./test_frame/")
+    lidar_fig_path = test.save_frame("./test_frame/")
+    # gps_pos_topic_list = parser.get_messages("/ins0/gps_pos") # gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
+    # gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
+    # map.draw_path(gps_pos_list)
 
-    map = Map()
-    map.draw_bus_lidar("./test_frame/")
+    html_file_path = 'demo_map.html'
+    #map = Map(17, html_file_path, gps_pos_list, test)
+    map = Map(17, html_file_path, None, test)
+    #map.draw_bus_lidar(fig_path)
+    #map.draw_path()
+    map.draw_bus_lidar(lidar_fig_path)
 
+    map.show_map()
