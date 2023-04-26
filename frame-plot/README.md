@@ -3,8 +3,8 @@ In order to plot a set of laserscan at a time from a big rosbag file (or db3 fil
 - [x] Deserialize from ros2 bag, (.db3 file)
 - [x] Get data, like /lidar_safety/front_left/scan, /ins0/gps_pos, /ins0/orientation
 - [x] Plot them
-- [ ] If there is a icon of the vechicle, add into a middile.
-- [ ] plot map
+- [x] If there is a icon of the vechicle, add into a middile.
+- [x] plot map
 
 plot a 3*2 subfig should look like this.    
 0,0 front left scan   
@@ -20,4 +20,4 @@ Not all the function only support .db3 file
 Since we change the storge format into mcap   
 It is better to use .mcap as a ros2bag format.   
 
-(TODO) Support .mcap file format
+Support .mcap and .db3 file format
