@@ -6,6 +6,8 @@ from sensor_msgs.msg import LaserScan
 from cv_bridge import CvBridge
 from mcap.reader import make_reader
 
+import yaml
+import sys, getopt
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,6 +31,12 @@ class BagFileParserFactory():
         self.file_type = None
         self.file_type = self.get_file_type()
         print("start parsing...")
+
+        with open(os.path.dirname(self.bag_file) + "/metadata.yaml", 'r') as stream:
+            self.metadata = yaml.safe_load(stream)
+            self.start_time = self.metadata['rosbag2_bagfile_information']["starting_time"]['nanoseconds_since_epoch']
+            self.duration = self.metadata['rosbag2_bagfile_information']["duration"]['nanoseconds']
+
         if self.file_type == "db3":
             self.parser = db3Parser(self.bag_file)
         elif self.file_type == "mcap":
@@ -89,9 +97,6 @@ Load .mcap ros2bag file
 class mcapParser():
     def __init__(self, file:str) -> None:
         self.reader =  make_reader(open(file, "rb"))
-
-    def __del__(self):
-        pass
     
     def get_messages(self, topic_name:str):
         print(f"get_messages: {topic_name}")
@@ -386,21 +391,74 @@ class Map:
 [ ] Readme.md
 '''
 
-if __name__ == "__main__":
-    parser = mcapParser("/home/kong/Documents/rosbag2.mcap")
+def print_help():
+    print('''
+Usage: ./plot_ros2bag.py -b <ros2bag_filename> -t <hh:mm:ss.ff>        
 
-    test = Frame(parser, 1681451854074038952) #gps_list[1000][0])
-    test.plot_all()
-    lidar_fig_path = test.save_frame("./test_frame/")
-    # gps_pos_topic_list = parser.get_messages("/ins0/gps_pos") # gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
-    # gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
+Options:
+-h --help     Show this screen.
+-b --bag      Ros2bag file path.
+-t --time     How much time has elapsed since the start of ros2bag.
+    ''')
+
+
+def main(argv):
+    rosbag_path = "/home/kong/Documents/rosbag2-cam-lidar/rosbag2_2023_04_14-13_33_57_0.mcap"
+    time_str = '00:11:00.00'
+
+    try:
+        opts, args = getopt.getopt(argv,"hb:t:",["help","bag=", "time="])
+    except getopt.GetoptError:
+        print ('See -h --help')
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == '-h' or opt == '--help':
+            print_help()
+            sys.exit()
+        elif opt in ("-b", "--bag"):
+            rosbag_path = arg
+        elif opt in ("-t", "--time"):
+            time_str = arg
+
+    try:    
+        #parser = mcapParser(rosbag_path)
+        parser = BagFileParserFactory(rosbag_path)
+    except IOError:
+        print ('Cannot open file: ' + rosbag_path)
+        sys.exit(2)
+
+    try:
+        time_obj = datetime.datetime.strptime(time_str, '%H:%M:%S.%f').time()
+        timestamp = datetime.timedelta(
+            hours=time_obj.hour, 
+            minutes=time_obj.minute, 
+            seconds=time_obj.second, 
+            microseconds=time_obj.microsecond).total_seconds() * 1e9
+    except ValueError:
+        print("Time format error" + time_str + ', should be <hh:mm:ss.ff>')
+        sys.exit(2)
+
+    if timestamp > parser.duration:
+        print("Time out of range, should be less than " + str(datetime.timedelta(seconds=parser.duration/1e9))[-15:-3])
+        sys.exit(2)
+
+    frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
+    frame_data.plot_all()
+    lidar_fig_path = frame_data.save_frame("./test_frame/")
+    gps_pos_topic_list = parser.get_parser().get_messages("/ins0/gps_pos") # gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
+    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
     # map.draw_path(gps_pos_list)
 
     html_file_path = 'demo_map.html'
-    #map = Map(17, html_file_path, gps_pos_list, test)
-    map = Map(17, html_file_path, None, test)
+    map = Map(17, html_file_path, gps_pos_list, frame_data)
+    #map = Map(17, html_file_path, None, test)
     #map.draw_bus_lidar(fig_path)
-    #map.draw_path()
+    map.draw_path()
     map.draw_bus_lidar(lidar_fig_path)
 
     map.show_map()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
