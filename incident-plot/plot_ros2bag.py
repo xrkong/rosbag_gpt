@@ -243,7 +243,7 @@ class Frame():
         gps_vel=self.gps_vel[1].vel #x,y,z
         print("ori:{:.7f}, lat:{:.7f}, lon:{:.7f}, vel:{:.3f}".format(math.degrees(ori), gps_pos.x, gps_pos.y, gps_vel.x))
 
-    def plot_all(self):
+    def plot_all(self, abs_path:str):
         #fig, axs = plt.subplots(2, 3, figsize=(10, 10), subplot_kw=dict(polar=True))
         fig = plt.figure()
         fl = self.scan_fl[1]
@@ -320,7 +320,9 @@ class Frame():
             print("No rear camera data")
             
         fig.suptitle(self.time_str)
-        plt.savefig('plot_'+self.time_str+'.png', dpi=300, bbox_inches='tight')
+        if not os.path.exists(abs_path):
+            os.makedirs(abs_path)   
+        plt.savefig(abs_path+'plot_'+self.time_str+'.png', dpi=300, bbox_inches='tight')
         plt.show()
 
 '''
@@ -361,13 +363,13 @@ class Map:
         bus.paste(lidar_img["rl"], (bus_lidar["rl"][0]-lidar_w//2, bus_lidar["rl"][1]-lidar_h//2), lidar_img["rl"])
         bus.paste(lidar_img["rr"], (bus_lidar["rr"][0]-lidar_w//2, bus_lidar["rr"][1]-lidar_h//2), lidar_img["rr"])
 
-        bus.save("demo.png") # save the original bus image
-        bus = bus.rotate((oritation)/math.pi*180).save("demo-ori.png")
+        bus.save("output/bus_demo.png") # save the original bus image
+        bus = bus.rotate((-oritation)/math.pi*180+180).save("output/demo-ori.png")
         if gps_pos is not None:
             self.pic_center = gps_pos
         # else: self.pic_center at UWA
 
-        icon_path = os.path.join(os.getcwd(),"demo-ori.png")
+        icon_path = os.path.join(os.getcwd(),"output/demo-ori.png")
         icon = folium.features.CustomIcon(icon_image=icon_path ,icon_size=(bus_w//20, bus_h//20))
         folium.Marker(gps_pos, icon=icon).add_to(self.map)
 
@@ -386,8 +388,8 @@ class Map:
 
 
 '''
-[ ] Read rosbag, timestamp from arguments
-[ ] change files name and path
+[x] Read rosbag, timestamp from arguments
+[x] change files name and path
 [ ] Readme.md
 '''
 
@@ -443,14 +445,16 @@ def main(argv):
         print("Time out of range, should be less than " + str(datetime.timedelta(seconds=parser.duration/1e9))[-15:-3])
         sys.exit(2)
 
+    
     frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
-    frame_data.plot_all()
-    lidar_fig_path = frame_data.save_frame("./test_frame/")
+    output_path = "./output/"
+    frame_data.plot_all(output_path)
+    lidar_fig_path = frame_data.save_frame(output_path+"lidar_frame/")
     gps_pos_topic_list = parser.get_parser().get_messages("/ins0/gps_pos") # gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
     gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
     # map.draw_path(gps_pos_list)
 
-    html_file_path = 'demo_map.html'
+    html_file_path = output_path+'demo_map.html'
     map = Map(17, html_file_path, gps_pos_list, frame_data)
     #map = Map(17, html_file_path, None, test)
     #map.draw_bus_lidar(fig_path)
