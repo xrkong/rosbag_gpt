@@ -4,10 +4,10 @@ import os
 import sys
 import pandas as pd
 import numpy as np
-from simplekml import Kml
+import math
 import folium
 import webbrowser
-import math
+from simplekml import Kml
 
 class Map:
     def __init__(self, zoom_start, file_path, trail_coordinates):  
