@@ -13,7 +13,7 @@ $
 
 
 TODO:    
-[ ] Write README.md    
-[ ] Fix the scale rule error of vehicle and lidars    
-[ ] Add a config file or arguments to let user change topic name    
-[ ] Integrate the functions from two separate projects into a single project     
+- [ ] Write README.md    
+- [ ] Fix the scale rule error of vehicle and lidars    
+- [ ] Add a config file or arguments to let user change topic name    
+- [ ] Integrate the functions from two separate projects into a single project     
