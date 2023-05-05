@@ -3,8 +3,9 @@ Visalisation regular drive record (e.g., '.csv' file) with kml and html
 A tool to visualise an autonomous vheicle data including path, lidar and camera from a ros2bag file (support '.db3' and '.mcap' format).   
 
 ## incident-plot
+Put it on the folder of path file.
 ```
-$ 
+$  
 ```
 
 
