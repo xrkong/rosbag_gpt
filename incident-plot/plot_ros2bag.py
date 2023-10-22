@@ -323,7 +323,7 @@ class Frame():
         fig.suptitle(self.time_str)
         if not os.path.exists(abs_path):
             os.makedirs(abs_path)   
-        plt.savefig(abs_path+'plot_'+self.time_str+'.png', dpi=300, bbox_inches='tight')
+        plt.savefig(abs_path+self.time_str+'plot_.png', dpi=300, bbox_inches='tight')
         plt.show()
 
 '''
@@ -466,6 +466,9 @@ def main(argv):
 
     html_file_path = output_path+map_name+'.html'
     map = Map(17, html_file_path, gps_pos_list)
+    #html_file_path = output_path+frame_data.time_str+'_map.html'
+    #map = Map(17, html_file_path, gps_pos_list, frame_data)
+    
     #map = Map(17, html_file_path, None, test)
     #map.draw_bus_lidar(fig_path)
     map.draw_path()
