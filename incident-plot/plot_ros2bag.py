@@ -7,7 +7,7 @@ from cv_bridge import CvBridge
 from mcap.reader import make_reader
 
 import yaml
-import sys, getopt
+#import sys, getopt
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,6 +16,7 @@ from PIL import Image
 import datetime
 import math
 import os
+import argparse
 from io import BytesIO
 import folium
 import webbrowser
@@ -57,6 +58,7 @@ class BagFileParserFactory():
 
 '''
 Load .db3 ros2bag file 
+[ ] modify get_msg_frame duration as a parameter
 '''
 class db3Parser():
     def __init__(self, bag_file):
@@ -81,7 +83,7 @@ class db3Parser():
         return [ (timestamp,deserialize_message(data, self.topic_msg_message[topic_name])) for timestamp,data in rows]
     
     # Return [(timestamp0, message0)] at time_stamp
-    def get_msg_frame(self, topic_name, timestamp):
+    def get_msg_frame(self, topic_name, timestamp, duration=5e6):
         topic_id = self.topic_id[topic_name]
         try:
             rows = self.cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = {} AND ABS(timestamp - {}) < 5E8".format(topic_id, timestamp)).fetchall()
@@ -93,6 +95,7 @@ class db3Parser():
 
 '''
 Load .mcap ros2bag file 
+[ ] modify get_msg_frame duration
 '''
 class mcapParser():
     def __init__(self, file:str) -> None:
@@ -106,14 +109,15 @@ class mcapParser():
             topic = deserialize_message(msg[2].data, get_message(msg[0].name))
             timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
             messages.append([timestamp, topic])
+            #print(timestamp)
         print(f"get_messages: {len(messages)}")
         return messages
 
-    def get_msg_frame(self, topic_name:str, timestamp):
+    def get_msg_frame(self, topic_name:str, timestamp, duration=1e12):
         print(f"get_msg_frame: {topic_name}")
         reader = self.reader
         messages = []
-        for msg in reader.iter_messages(topics=[topic_name], start_time=timestamp - 5e8, end_time=timestamp + 5e8):
+        for msg in reader.iter_messages(topics=[topic_name], start_time=timestamp - duration/2, end_time=timestamp + duration/2):
             topic = deserialize_message(msg[2].data, get_message(msg[0].name))
             cur_timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
             messages.append([cur_timestamp, topic])
@@ -124,6 +128,8 @@ class mcapParser():
 
 '''
 data frame from a parser
+[ ] convert cloud to scan or add cloud plot
+[ ] plot data based on topic type, e.g. scan, cloud, image, pose, gps
 '''
 class Frame():
     def __init__(self, parser, timestamp) -> None:
@@ -134,7 +140,12 @@ class Frame():
             # self.scan_fr = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
             # self.scan_rl = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
             # self.scan_rr = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
-            # Left priority
+            # Left priority cloud TODO: change to scan
+            # self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/cloud", timestamp)
+            # self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/cloud", timestamp)
+            # self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/cloud", timestamp)
+            # self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/cloud", timestamp)
+            # Left priority scan
             self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
             self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
             self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
@@ -328,10 +339,7 @@ class Frame():
 
 '''
 Map class
-[x] Get all path point based on rosbag
-[x] Get a frame data from Frame class
-[x] Attach lidar images with a bus icon ori = 0, save as a new image
-[x] Add a bus icon based on the frame data with a given oriention
+[ ] add default bus icon
 '''
 class Map:
     def __init__(self, zoom_start, file_path, trail_coordinates, bus_frame:Frame=None):  
@@ -389,93 +397,90 @@ class Map:
         self.map.save(self.file_path)
         webbrowser.open(self.file_path)
 
-
-'''
-[x] Read rosbag, timestamp from arguments
-[x] change files name and path
-[ ] Readme.md
-'''
-
-def print_help():
-    print('''
-Usage: ./plot_ros2bag.py -b <ros2bag_filename> -t <hh:mm:ss.ff>        
-
-Options:
--h --help     Show this screen.
--b --bag      Ros2bag file path.
--t --time     How much time has elapsed since the start of ros2bag.
-    ''')
-
-
-def main(argv):
-    rosbag_path = "/home/kong/dataset/eglinton-oct/oct22/regular/rosbag2_2023_10_22-05_08_24-save/rosbag2_2023_10_22-05_08_24_0.mcap "
-    time_str = '00:11:00.00'
-    drive_type = 'regular'
-
+def is_valid_timestamp(timestamp, duration):
+    """
+    Checks if the given timestamp (in seconds) is non-negative using a try-except approach.
+    
+    Args:
+        timestamp (float): Timestamp in seconds to validate.
+        
+    Returns:
+        tuple: (bool, str). True and an empty string if valid, 
+              False and the error message otherwise.
+    """
     try:
-        opts, args = getopt.getopt(argv,"hb:t:d:",["help","bag=", "time=", "drive_type="])
-    except getopt.GetoptError:
-        print ('See -h --help')
-        sys.exit(2)
+        if timestamp < 0:
+            raise ValueError("Timestamp should be a non-negative value.")
+        if timestamp > duration/1e9:
+            raise ValueError(f"Timestamp should not exceed the maximum duration of {duration/1e9} seconds.")
+        return (True, "")
+    except ValueError as e:
+        return (False, str(e))
 
-    for opt, arg in opts:
-        if opt == '-h' or opt == '--help':
-            print_help()
-            sys.exit()
-        elif opt in ("-b", "--bag"):
-            rosbag_path = arg
-        elif opt in ("-t", "--time"):
-            time_str = arg
-        elif opt in ("-d", "--drive_type"):
-            drive_type = arg
+def main():
+    arg_parser = argparse.ArgumentParser(description="ROS bag processing tool. By xrkong")
+    arg_parser.add_argument("rosbag_path", type=str, help="Path to the rosbag file, acceptable file types are .db3 and .mcap")
+    arg_parser.add_argument("-g", "--gps-topic", 
+                        type=str, 
+                        default="/sbg/gps_pos",  
+                        help="Name of the GPS topic in the rosbag. Defaults to '/gps'.")
+    arg_parser.add_argument("-t", "--timestamp", 
+                        type=float, 
+                        help="Timestamp for the rosbag processing in seconds (e.g., 123.123456). If not provided, only draw path in rosbag.",
+                        default=None)
+    arg_parser.add_argument("-o", "--output-path", 
+                        type=str, 
+                        default="./output", 
+                        help="Path to the output directory. If it doesn't exist, it will be created.")
+    arg_parser.add_argument("-p", "--path-type", type=str, choices=["regular", "incident"], default="regular", help="Path type: blue (regular) or red (incident)")
+    args = arg_parser.parse_args()
 
     try:    
-        parser = BagFileParserFactory(rosbag_path)
+        bag_parser = BagFileParserFactory(args.rosbag_path)
     except IOError:
-        print ('Cannot open file: ' + rosbag_path)
-        sys.exit(2)
+        print ('Cannot open file: ' + args.rosbag_path)
 
-    # try:
-    #     time_obj = datetime.datetime.strptime(time_str, '%H:%M:%S.%f').time()
-    #     timestamp = datetime.timedelta(
-    #         hours=time_obj.hour, 
-    #         minutes=time_obj.minute, 
-    #         seconds=time_obj.second, 
-    #         microseconds=time_obj.microsecond).total_seconds() * 1e9
-    # except ValueError:
-    #     print("Time format error" + time_str + ', should be <hh:mm:ss.ff>')
-    #     sys.exit(2)
+    # check output path
+    output_path = args.output_path
+    if not os.path.exists(output_path):
+        try:
+            os.makedirs(output_path)
+            print(f"Output directory {output_path} created.")
+        except OSError as e:
+            print(f"Error creating directory {output_path}: {str(e)}")
+            return
 
-    # if timestamp > parser.duration:
-    #     print("Time out of range, should be less than " + str(datetime.timedelta(seconds=parser.duration/1e9))[-15:-3])
-    #     sys.exit(2)
+    # get the frame data
+    if args.timestamp is not None:
+        print("timestamp is input" )
+        valid, error_message = is_valid_timestamp(args.timestamp, bag_parser.duration)
+        if args.timestamp is not None and not valid:
+            print(f"Error with the provided timestamp '{args.timestamp}': {error_message}")
+            return
+        test = bag_parser.get_parser().get_messages("/lidar_safety/front_left/cloud") 
+        frame_data = Frame(bag_parser.get_parser(), bag_parser.start_time + args.timestamp * 1e9)
+        frame_data.plot_all(output_path)
+
+    # else no frame data, only draw path
+    map_name = os.path.splitext(os.path.basename(args.rosbag_path))[0]
+    gps_pos_topic_list = bag_parser.get_parser().get_messages(args.gps_topic) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
+    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
 
     #timestamp = float(time_str) * 1e9
     #frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
     #frame_data = Frame(parser.get_parser(), timestamp) #1681451854074038952
 
-    map_name = os.path.splitext(os.path.basename(rosbag_path))[0]
-
-    output_path = "./output/"
     #frame_data.plot_all(output_path)
     #lidar_fig_path = frame_data.save_frame(output_path+"lidar_frame/")
-    gps_pos_topic_list = parser.get_parser().get_messages("/sbg/gps_pos") #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
-    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
+
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
 
     html_file_path = output_path+map_name+'.html'
     map = Map(17, html_file_path, gps_pos_list)
-    #html_file_path = output_path+frame_data.time_str+'_map.html'
-    #map = Map(17, html_file_path, gps_pos_list, frame_data)
-    
-    #map = Map(17, html_file_path, None, test)
-    #map.draw_bus_lidar(fig_path)
     map.draw_path()
-    #map.draw_bus_lidar(lidar_fig_path)
-
     map.show_map()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
