@@ -129,3 +129,6 @@ dmypy.json
 .pyre/
 *.xcf
 *.html
+*.kml
+csv_plot/popup_image/
+csv_plot/stop_gps.csv
