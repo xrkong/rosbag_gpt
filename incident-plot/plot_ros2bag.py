@@ -250,6 +250,7 @@ class Frame():
         fr = self.scan_fr[1]
         rl = self.scan_rl[1]
         rr = self.scan_rr[1]
+        ring_lim = 3 # 5meters as the limit of the plot
 
         r = [x for x in fl._ranges ]
         theta = np.linspace(fl._angle_min, fl._angle_max, len(r), endpoint=False) 
@@ -259,7 +260,7 @@ class Frame():
         axs.fill(theta, r, alpha=0.7) # fill area
         axs.set_theta_zero_location('NW') 
         axs.set_title('front left', fontweight='bold')
-        axs.set_ylim(0, 50)
+        axs.set_ylim(0, ring_lim)
         axs.set_rlabel_position(0) 
         axs.set_theta_direction(-1) # clockwise axis Z is down
 
@@ -270,7 +271,7 @@ class Frame():
         axs.fill(theta, r, alpha=0.7)
         axs.set_theta_zero_location('NE')
         axs.set_title('front right', fontweight='bold')
-        axs.set_ylim(0, 50)
+        axs.set_ylim(0, ring_lim)
         axs.set_rlabel_position(0)
         axs.set_theta_direction(-1)
 
@@ -282,7 +283,7 @@ class Frame():
         axs.fill(theta, r, alpha=0.7)
         axs.set_theta_zero_location('SW')
         axs.set_title('rear left', fontweight='bold')
-        axs.set_ylim(0, 50)
+        axs.set_ylim(0, ring_lim)
         axs.set_rlabel_position(0)        
         axs.set_theta_direction(-1)
 
@@ -293,7 +294,7 @@ class Frame():
         # Fill the area enclosed by the line
         axs.fill(theta, r, alpha=0.7)
         axs.set_theta_zero_location('SE')
-        axs.set_ylim(0, 50)
+        axs.set_ylim(0, ring_lim)
         axs.set_rlabel_position(0)
         axs.set_title('rear right', fontweight='bold')
         axs.set_theta_direction(-1)
@@ -333,7 +334,7 @@ Map class
 [x] Add a bus icon based on the frame data with a given oriention
 '''
 class Map:
-    def __init__(self, zoom_start, file_path, trail_coordinates, bus_frame:Frame):  
+    def __init__(self, zoom_start, file_path, trail_coordinates, bus_frame:Frame=None):  
         self.zoom_start = zoom_start
         if trail_coordinates is not None:
             self.path = trail_coordinates
@@ -378,7 +379,9 @@ class Map:
             self.pic_center = np.mean(self.path, 0)
             for i in range(len(self.path)-2):
                 if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
-                    folium.PolyLine(self.path[i:i+2]).add_to(self.map)
+                    folium.PolyLine(locations=self.path[i:i+2],     
+                                    color="red",
+                                    weight=10, ).add_to(self.map)
         else:
             print("No path data")
 
@@ -405,11 +408,12 @@ Options:
 
 
 def main(argv):
-    rosbag_path = "/home/kong/Documents/rosbag2-cam-lidar/rosbag2_2023_04_14-13_33_57_0.mcap"
+    rosbag_path = "/home/kong/dataset/eglinton-oct/oct22/regular/rosbag2_2023_10_22-05_08_24-save/rosbag2_2023_10_22-05_08_24_0.mcap "
     time_str = '00:11:00.00'
+    drive_type = 'regular'
 
     try:
-        opts, args = getopt.getopt(argv,"hb:t:",["help","bag=", "time="])
+        opts, args = getopt.getopt(argv,"hb:t:d:",["help","bag=", "time=", "drive_type="])
     except getopt.GetoptError:
         print ('See -h --help')
         sys.exit(2)
@@ -422,44 +426,50 @@ def main(argv):
             rosbag_path = arg
         elif opt in ("-t", "--time"):
             time_str = arg
+        elif opt in ("-d", "--drive_type"):
+            drive_type = arg
 
     try:    
-        #parser = mcapParser(rosbag_path)
         parser = BagFileParserFactory(rosbag_path)
     except IOError:
         print ('Cannot open file: ' + rosbag_path)
         sys.exit(2)
 
-    try:
-        time_obj = datetime.datetime.strptime(time_str, '%H:%M:%S.%f').time()
-        timestamp = datetime.timedelta(
-            hours=time_obj.hour, 
-            minutes=time_obj.minute, 
-            seconds=time_obj.second, 
-            microseconds=time_obj.microsecond).total_seconds() * 1e9
-    except ValueError:
-        print("Time format error" + time_str + ', should be <hh:mm:ss.ff>')
-        sys.exit(2)
+    # try:
+    #     time_obj = datetime.datetime.strptime(time_str, '%H:%M:%S.%f').time()
+    #     timestamp = datetime.timedelta(
+    #         hours=time_obj.hour, 
+    #         minutes=time_obj.minute, 
+    #         seconds=time_obj.second, 
+    #         microseconds=time_obj.microsecond).total_seconds() * 1e9
+    # except ValueError:
+    #     print("Time format error" + time_str + ', should be <hh:mm:ss.ff>')
+    #     sys.exit(2)
 
-    if timestamp > parser.duration:
-        print("Time out of range, should be less than " + str(datetime.timedelta(seconds=parser.duration/1e9))[-15:-3])
-        sys.exit(2)
+    # if timestamp > parser.duration:
+    #     print("Time out of range, should be less than " + str(datetime.timedelta(seconds=parser.duration/1e9))[-15:-3])
+    #     sys.exit(2)
 
-    
-    frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
+    #timestamp = float(time_str) * 1e9
+    #frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
+    #frame_data = Frame(parser.get_parser(), timestamp) #1681451854074038952
+
+    map_name = os.path.splitext(os.path.basename(rosbag_path))[0]
+
     output_path = "./output/"
-    frame_data.plot_all(output_path)
-    lidar_fig_path = frame_data.save_frame(output_path+"lidar_frame/")
-    gps_pos_topic_list = parser.get_parser().get_messages("/ins0/gps_pos") # gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
+    #frame_data.plot_all(output_path)
+    #lidar_fig_path = frame_data.save_frame(output_path+"lidar_frame/")
+    gps_pos_topic_list = parser.get_parser().get_messages("/sbg/gps_pos") #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
     gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
-    # map.draw_path(gps_pos_list)
+    #map = Map(17, html_file_path, gps_pos_list)
+    #map.draw_path(gps_pos_list)
 
-    html_file_path = output_path+'demo_map.html'
-    map = Map(17, html_file_path, gps_pos_list, frame_data)
+    html_file_path = output_path+map_name+'.html'
+    map = Map(17, html_file_path, gps_pos_list)
     #map = Map(17, html_file_path, None, test)
     #map.draw_bus_lidar(fig_path)
     map.draw_path()
-    map.draw_bus_lidar(lidar_fig_path)
+    #map.draw_bus_lidar(lidar_fig_path)
 
     map.show_map()
 
