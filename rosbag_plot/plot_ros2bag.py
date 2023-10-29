@@ -141,15 +141,15 @@ class Frame():
             # self.scan_rl = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
             # self.scan_rr = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
             # Left priority cloud TODO: change to scan
-            # self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/cloud", timestamp)
-            # self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/cloud", timestamp)
-            # self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/cloud", timestamp)
-            # self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/cloud", timestamp)
+            self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/cloud", timestamp)
+            self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/cloud", timestamp)
+            self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/cloud", timestamp)
+            self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/cloud", timestamp)
             # Left priority scan
-            self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
-            self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
-            self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
-            self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
+            # self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
+            # self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
+            # self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
+            # self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
             self.cam_front = parser.get_msg_frame("/CameraFront", timestamp)
             self.cam_rear  = parser.get_msg_frame("/CameraRear", timestamp)
             self.ori = parser.get_msg_frame("/ins0/orientation", timestamp) #ori[times]
@@ -382,14 +382,22 @@ class Map:
         icon = folium.features.CustomIcon(icon_image=icon_path ,icon_size=(bus_w//20, bus_h//20))
         folium.Marker(gps_pos, icon=icon).add_to(self.map)
 
-    def draw_path(self):
+    def draw_path(self, drive_type="regular"):
+
+        if drive_type == "reg":
+            color = "blue"
+            weight = 2
+        elif drive_type == "inc":
+            color = "red"
+            weight = 10
+
         if self.map is not None and self.path is not None:
             self.pic_center = np.mean(self.path, 0)
             for i in range(len(self.path)-2):
                 if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
                     folium.PolyLine(locations=self.path[i:i+2],     
-                                    color="red",
-                                    weight=10, ).add_to(self.map)
+                                    color=color,
+                                    weight=weight, ).add_to(self.map)
         else:
             print("No path data")
 
@@ -432,7 +440,7 @@ def main():
                         type=str, 
                         default="./output", 
                         help="Path to the output directory. If it doesn't exist, it will be created.")
-    arg_parser.add_argument("-p", "--path-type", type=str, choices=["regular", "incident"], default="regular", help="Path type: blue (regular) or red (incident)")
+    arg_parser.add_argument("-p", "--path-type", type=str, choices=["reg", "inc"], default="regular", help="Path type: blue (regular) or red (incident)")
     args = arg_parser.parse_args()
 
     try:    
@@ -476,9 +484,14 @@ def main():
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
 
+    if args.path_type == "inc":
+        html_file_path = output_path+map_name+'-inc.html'
+    else:
+        html_file_path = output_path+map_name+'.html'
+
     html_file_path = output_path+map_name+'.html'
     map = Map(17, html_file_path, gps_pos_list)
-    map.draw_path()
+    map.draw_path(args.path_type)
     map.show_map()
 
 
