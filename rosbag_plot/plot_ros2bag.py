@@ -342,13 +342,26 @@ Map class
 [ ] add default bus icon
 '''
 class Map:
-    def __init__(self, zoom_start, file_path, trail_coordinates, bus_frame:Frame=None):  
+    def __init__(self, zoom_start, file_path, trail_coordinates, incident_stop=None, bus_frame:Frame=None):  
         self.zoom_start = zoom_start
+        self.path = [0,0]
         if trail_coordinates is not None:
             self.path = trail_coordinates
         elif bus_frame is not None:
             self.path = [[bus_frame.gps_pos[1].position.x, bus_frame.gps_pos[1].position.y]]
-        self.pic_center = np.mean(self.path, 0)
+            #self.path = [sublist for sublist in orin_path if all(range_min <= item <= range_max for item in sublist)]
+
+        if incident_stop is not None:
+            self.stop = incident_stop
+        else:
+            self.stop = None
+        
+        self.path = np.array(self.path)
+        self.path = self.path[self.path[:,0]>-35]
+        self.path = self.path[self.path[:,0]<-30]
+        self.path = self.path[self.path[:,1]>110]
+        self.path = self.path[self.path[:,1]<120]
+        self.pic_center = np.mean(self.path, 0) # TODO: chang the point
         self.file_path = file_path
         self.map = folium.Map(location = self.pic_center, zoom_start = self.zoom_start)
         self.frame = bus_frame
@@ -382,24 +395,36 @@ class Map:
         icon = folium.features.CustomIcon(icon_image=icon_path ,icon_size=(bus_w//20, bus_h//20))
         folium.Marker(gps_pos, icon=icon).add_to(self.map)
 
-    def draw_path(self, drive_type="regular"):
+    def draw_path(self):
 
-        if drive_type == "reg":
-            color = "blue"
-            weight = 2
-        elif drive_type == "inc":
-            color = "red"
-            weight = 10
+        # if drive_type == "reg":
+        #     color = "blue"
+        #     weight = 2
+        # elif drive_type == "inc":
+        #     color = "red"
+        #     weight = 10
+
 
         if self.map is not None and self.path is not None:
             self.pic_center = np.mean(self.path, 0)
             for i in range(len(self.path)-2):
                 if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
                     folium.PolyLine(locations=self.path[i:i+2],     
-                                    color=color,
-                                    weight=weight, ).add_to(self.map)
-        else:
-            print("No path data")
+                                    color="blue",
+                                    weight=2, ).add_to(self.map)
+                    
+        #self.stop
+        if self.map is not None and self.stop is not None:
+            for i in range(len(self.stop)):
+                folium.CircleMarker(location=self.stop[i],     
+                                    radius=10,
+                                    weight=3,
+                                    fill=False,
+                                    fill_opacity=0.6,
+                                    opacity=1,
+                                    color="red",).add_to(self.map)
+        # else:
+        #     print("No path data")
 
     def show_map(self):
         self.map.save(self.file_path)
@@ -424,6 +449,15 @@ def is_valid_timestamp(timestamp, duration):
         return (True, "")
     except ValueError as e:
         return (False, str(e))
+    
+def save_img(abs_path:str, img, name:str):
+    bridge = CvBridge()
+    New_Image_Save_Path=os.path.join(abs_path, "img")
+    cv_img_front = bridge.imgmsg_to_cv2(img[1], desired_encoding='passthrough')
+    output_path = os.path.join(New_Image_Save_Path, str(name)+'.png')
+    cv2.imwrite(output_path, cv_img_front)
+    print("Image saved: ", name)
+
 
 def main():
     arg_parser = argparse.ArgumentParser(description="ROS bag processing tool. By xrkong")
@@ -440,13 +474,17 @@ def main():
                         type=str, 
                         default="./output", 
                         help="Path to the output directory. If it doesn't exist, it will be created.")
-    arg_parser.add_argument("-p", "--path-type", type=str, choices=["reg", "inc"], default="regular", help="Path type: blue (regular) or red (incident)")
+    arg_parser.add_argument("-s", "--snapshot-path", 
+                        type=str, 
+                        default="./output/incident", 
+                        help="Incident rosbag file path. If None draw nothing.")
     args = arg_parser.parse_args()
 
     try:    
         bag_parser = BagFileParserFactory(args.rosbag_path)
     except IOError:
         print ('Cannot open file: ' + args.rosbag_path)
+
 
     # check output path
     output_path = args.output_path
@@ -465,14 +503,31 @@ def main():
         if args.timestamp is not None and not valid:
             print(f"Error with the provided timestamp '{args.timestamp}': {error_message}")
             return
-        test = bag_parser.get_parser().get_messages("/lidar_safety/front_left/cloud") 
         frame_data = Frame(bag_parser.get_parser(), bag_parser.start_time + args.timestamp * 1e9)
         frame_data.plot_all(output_path)
 
-    # else no frame data, only draw path
-    map_name = os.path.splitext(os.path.basename(args.rosbag_path))[0]
+    # get the snapshot
+    stop_gps_pos_list = None
+    if args.snapshot_path is not None:
+        snapshot_path = args.snapshot_path
+        print("Get incident rosbag, validate the file..." )
+        if os.path.exists(snapshot_path) is False:
+            print (' Cannot open the incident file: ', snapshot_path, ' Ignore it')
+
+        try:    
+            snapshot_parser = BagFileParserFactory(snapshot_path)
+            stop_gps_pos_topic_list = snapshot_parser.get_parser().get_messages(args.gps_topic)
+            stop_gps_pos_list = [(stop_gps_pos_topic_list[i][1].position.x, 
+                             stop_gps_pos_topic_list[i][1].position.y) for i in range(len(stop_gps_pos_topic_list))]
+        except IOError:
+            print (' Cannot open the file, ignore the incident file: ', snapshot_path)
+            pass
+
+    # TODO else no frame data, only draw path
+    map_name = '/'+os.path.splitext(os.path.basename(args.rosbag_path))[0]
     gps_pos_topic_list = bag_parser.get_parser().get_messages(args.gps_topic) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
-    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
+    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, 
+                     gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
 
     #timestamp = float(time_str) * 1e9
     #frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
@@ -484,14 +539,20 @@ def main():
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
 
-    if args.path_type == "inc":
-        html_file_path = output_path+map_name+'-inc.html'
-    else:
-        html_file_path = output_path+map_name+'.html'
+    all_image = bag_parser.get_parser().get_messages("/CameraFront") 
+    img_index = 0
+    if all_image is None:
+        print("No image data")
+        return
+    
+    for msg in all_image:
+        save_img(output_path, msg, img_index)
+        img_index = img_index + 1
 
     html_file_path = output_path+map_name+'.html'
-    map = Map(17, html_file_path, gps_pos_list)
-    map.draw_path(args.path_type)
+    map = Map(17, html_file_path, gps_pos_list, stop_gps_pos_list)
+
+    map.draw_path()
     map.show_map()
 
 

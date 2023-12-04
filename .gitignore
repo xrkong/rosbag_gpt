@@ -132,3 +132,7 @@ dmypy.json
 *.kml
 csv_plot/popup_image/
 csv_plot/stop_gps.csv
+output/*
+rosbag_plot/output*
+.vscode/launch.json
+rosbag_plot/bus_icon*
