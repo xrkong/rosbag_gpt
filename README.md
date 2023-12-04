@@ -24,7 +24,7 @@ $ python plot_ros2bag -h
 ![Plot path and stops from rosbag](./document/path_demo.png)
 
 ## Plot Snapshot
-![Plot snapshot from rosbag](./document/snapshot_demo.png | width=10)
+![Plot snapshot from rosbag](./document/snapshot_demo.png)
 # Roadmap
 
 - [x] Deserialize from ros2 bag, (.db3 file)
