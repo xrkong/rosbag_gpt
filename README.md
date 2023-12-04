@@ -21,10 +21,10 @@ $ python plot_ros2bag -h
 
 
 ## Plot Path
-![Plot path and stops from rosbag](./document/path_demo.png){ width=80% }
+![Plot path and stops from rosbag](./document/path_demo.png){: width=80% }
 
 ## Plot Snapshot
-![Plot snapshot from rosbag](./document/snapshot_demo.png){ width=75%}
+![Plot snapshot from rosbag](./document/snapshot_demo.png){: width=75%}
 
 # Roadmap
 
