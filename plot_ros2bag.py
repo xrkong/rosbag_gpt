@@ -545,7 +545,11 @@ def main():
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
     all_joy = bag_parser.get_parser().get_messages("/joy") 
-    all_image = bag_parser.get_parser().get_messages("/CameraFront") 
+    start_time = bag_parser.start_time
+    end_time = bag_parser.start_time + bag_parser.duration // 2
+    all_image = bag_parser.get_parser().get_messages("/CameraFront", 
+                                                     start_time = start_time, 
+                                                     end_time = end_time) 
     img_index = 0
     if all_image is None:
         print("No image data")
