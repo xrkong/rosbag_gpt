@@ -101,15 +101,21 @@ class mcapParser():
     def __init__(self, file:str) -> None:
         self.reader =  make_reader(open(file, "rb"))
     
-    def get_messages(self, topic_name:str):
+    def get_messages(self, topic_name:str, start_time=None, end_time=None):
         print(f"get_messages: {topic_name}")
         reader = self.reader
         messages = []
-        for msg in reader.iter_messages(topics=[topic_name]):
-            topic = deserialize_message(msg[2].data, get_message(msg[0].name))
-            timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
-            messages.append([timestamp, topic])
-            #print(timestamp)
+        if start_time is not None and end_time is not None:
+            for msg in reader.iter_messages(topics=[topic_name], start_time=start_time, end_time=end_time):
+                topic = deserialize_message(msg[2].data, get_message(msg[0].name))
+                timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
+                messages.append([timestamp, topic])
+        else:
+            for msg in reader.iter_messages(topics=[topic_name]):
+                topic = deserialize_message(msg[2].data, get_message(msg[0].name))
+                timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
+                messages.append([timestamp, topic])
+                #print(timestamp)
         print(f"get_messages: {len(messages)}")
         return messages
 
@@ -476,7 +482,7 @@ def main():
                         help="Path to the output directory. If it doesn't exist, it will be created.")
     arg_parser.add_argument("-s", "--snapshot-path", 
                         type=str, 
-                        default="./output/incident", 
+                        default=None, 
                         help="Incident rosbag file path. If None draw nothing.")
     args = arg_parser.parse_args()
 
@@ -495,7 +501,7 @@ def main():
         except OSError as e:
             print(f"Error creating directory {output_path}: {str(e)}")
             return
-
+        
     # get the frame data
     if args.timestamp is not None:
         print("timestamp is input" )
@@ -538,7 +544,7 @@ def main():
 
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
-
+    all_joy = bag_parser.get_parser().get_messages("/joy") 
     all_image = bag_parser.get_parser().get_messages("/CameraFront") 
     img_index = 0
     if all_image is None:
