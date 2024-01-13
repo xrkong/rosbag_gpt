@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # modify the following variables
-DIRECTORY="/home/kong/dataset/eglinton-dec"
+DIRECTORY="/home/kong/dataset/eglinton/dec"
 PYTHON_SCRIPT="./plot_ros2bag.py"
 
-for file in "$DIRECTORY"/05/*/*/*.mcap
+for file in "$DIRECTORY"/17/*/*/*.mcap
 do
     file_name=$(basename "$file")
     parent_dir=$(basename "$(dirname "$file")")
