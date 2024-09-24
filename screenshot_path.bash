@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Specify the area for the screenshot
-X=100  # X coordinate
-Y=370  # Y coordinate
-WIDTH=1600  # Width
-HEIGHT=500  # Height
+X=50  # X coordinate
+Y=450  # Y coordinate
+WIDTH=1750  # Width
+HEIGHT=650  # Height
 OUTPUT="screenshot.png"  # Output file name
 
 # open webpage
@@ -20,6 +20,7 @@ do
     sleep 3
     # sudo apt-get install imagemagick
     # Take a screenshot of the specified area
-    import -window root -crop "${WIDTH}x${HEIGHT}+${X}+${Y}" "$HTML_FOLDER"/"$output"
+    import -window "$(xdotool getwindowfocus)" -crop "${WIDTH}x${HEIGHT}+${X}+${Y}" "$HTML_FOLDER"/"$output"
+    #scrot -a {X},${Y},${WIDTH},${HEIGHT} "$HTML_FOLDER"/"$output"
     sleep 1
 done

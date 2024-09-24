@@ -7,7 +7,7 @@ from cv_bridge import CvBridge
 from mcap.reader import make_reader
 
 import yaml
-#import sys, getopt
+import sys
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,6 +17,7 @@ import datetime
 import math
 import os
 import argparse
+import pandas as pd
 from io import BytesIO
 import folium
 import webbrowser
@@ -62,14 +63,19 @@ Load .db3 ros2bag file
 '''
 class db3Parser():
     def __init__(self, bag_file):
+
+        # try:
         self.conn = sqlite3.connect(bag_file)
         self.cursor = self.conn.cursor()
-
-        ## create a message type map
+            ## create a message type map
         topics_data = self.cursor.execute("SELECT id, name, type FROM topics").fetchall()
         self.topic_type = {name_of:type_of for id_of,name_of,type_of in topics_data}
         self.topic_id = {name_of:id_of for id_of,name_of,type_of in topics_data}
         self.topic_msg_message = {name_of:get_message(type_of) for id_of,name_of,type_of in topics_data}
+
+        # except sqlite3.Error as e:
+        #     print(f"Error: {e}")
+            
 
     def __del__(self):
         self.conn.close()
@@ -93,6 +99,9 @@ class db3Parser():
             return None
         # Deserialise all and timestamp them
 
+class Inference():
+    pass
+
 '''
 Load .mcap ros2bag file 
 [ ] modify get_msg_frame duration
@@ -102,7 +111,7 @@ class mcapParser():
         self.reader =  make_reader(open(file, "rb"))
     
     def get_messages(self, topic_name:str, start_time=None, end_time=None):
-        print(f"get_messages: {topic_name}")
+        print(f"extract messages: {topic_name}")
         reader = self.reader
         messages = []
         if start_time is not None and end_time is not None:
@@ -116,8 +125,13 @@ class mcapParser():
                 timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
                 messages.append([timestamp, topic])
                 #print(timestamp)
-        print(f"get_messages: {len(messages)}")
-        return messages
+        
+        if len(messages) == 0:
+            print("No message found")
+            return None
+        else:
+            print(f"get_messages: {len(messages)}")
+            return messages
 
     def get_msg_frame(self, topic_name:str, timestamp, duration=1e12):
         print(f"get_msg_frame: {topic_name}")
@@ -354,7 +368,7 @@ class Map:
         if trail_coordinates is not None:
             self.path = trail_coordinates
         elif bus_frame is not None:
-            self.path = [[bus_frame.gps_pos[1].position.x, bus_frame.gps_pos[1].position.y]]
+            self.path = [[bus_frame.gps_pos[1].longitude, bus_frame.gps_pos[1].latitude]]
             #self.path = [sublist for sublist in orin_path if all(range_min <= item <= range_max for item in sublist)]
 
         if incident_stop is not None:
@@ -369,12 +383,12 @@ class Map:
         self.path = self.path[self.path[:,1]<120]
         self.pic_center = np.mean(self.path, 0) # TODO: chang the point
         self.file_path = file_path
-        self.map = folium.Map(location = self.pic_center, zoom_start = self.zoom_start)
+        self.map = folium.Map(location = [-31.595436, 115.662379], zoom_start = self.zoom_start) # -31.595436, 115.662379 for Eglinton
         self.frame = bus_frame
     
     def draw_bus_lidar(self, lidar_path:str):
         oritation = self.frame.ori[1].angle.z
-        gps_pos = [self.frame.gps_pos[1].position.x, self.frame.gps_pos[1].position.y]
+        gps_pos = [self.frame.gps_pos[1].longitude, self.frame.gps_pos[1].latitude]
         bus =Image.open(os.path.dirname(os.path.abspath(__file__))+"/bus.png").convert("RGBA")
         bus_w, bus_h = bus.size 
 
@@ -402,15 +416,6 @@ class Map:
         folium.Marker(gps_pos, icon=icon).add_to(self.map)
 
     def draw_path(self):
-
-        # if drive_type == "reg":
-        #     color = "blue"
-        #     weight = 2
-        # elif drive_type == "inc":
-        #     color = "red"
-        #     weight = 10
-
-
         if self.map is not None and self.path is not None:
             self.pic_center = np.mean(self.path, 0)
             for i in range(len(self.path)-2):
@@ -435,6 +440,13 @@ class Map:
     def show_map(self):
         self.map.save(self.file_path)
         webbrowser.open(self.file_path)
+
+    def save_map(self):
+        if self.stop:
+            csv_path = os.path.splitext(self.file_path)[0]+'_inc.csv'
+        else:
+            csv_path = os.path.splitext(self.file_path)[0]+'.csv'
+        np.savetxt(csv_path, self.path, delimiter=',', fmt='%s', header="Latitude, Longitude", comments='')
 
 def is_valid_timestamp(timestamp, duration):
     """
@@ -464,10 +476,12 @@ def save_img(abs_path:str, img, name:str):
     cv2.imwrite(output_path, cv_img_front)
     print("Image saved: ", name)
 
-
-def main():
+def parse_args(args):
     arg_parser = argparse.ArgumentParser(description="ROS bag processing tool. By xrkong")
-    arg_parser.add_argument("rosbag_path", type=str, help="Path to the rosbag file, acceptable file types are .db3 and .mcap")
+    # process rosbag file
+    arg_parser.add_argument("rosbag_path", 
+                        type=str, 
+                        help="Path to the rosbag file, acceptable file types are .db3 and .mcap")
     arg_parser.add_argument("-g", "--gps-topic", 
                         type=str, 
                         default="/sbg/gps_pos",  
@@ -484,13 +498,31 @@ def main():
                         type=str, 
                         default=None, 
                         help="Incident rosbag file path. If None draw nothing.")
-    args = arg_parser.parse_args()
+    # process .csv file
+    arg_parser.add_argument("-c", "--gps-csv-path", 
+                        type=str, 
+                        default=None, 
+                        help="get the GPS csv file.")
+    arg_parser.add_argument("-i", "--incident-csv-path", 
+                        type=str, 
+                        default=None, 
+                        help="get the incident csv file.")
+    return arg_parser.parse_args()
+
+def main():
+    print(sys.argv[1:])
+    args = parse_args(sys.argv[1:])
+
+    gps_csv = pd.read_csv(args.gps_csv_path)
+    gps_pos_list = [(gps_csv['Latitude'][i], gps_csv['Longitude'][i]) for i in range(len(gps_csv))]
+
+    incident_csv = pd.read_csv(args.incident_csv_path)
+    stop_gps_pos_list = [(incident_csv['Latitude'][i], incident_csv['Longitude'][i]) for i in range(len(incident_csv))]
 
     try:    
         bag_parser = BagFileParserFactory(args.rosbag_path)
     except IOError:
-        print ('Cannot open file: ' + args.rosbag_path)
-
+        print ('Cannot open file: ' + args.rosbag_path + ', please check the rosbag file path')
 
     # check output path
     output_path = args.output_path
@@ -523,17 +555,17 @@ def main():
         try:    
             snapshot_parser = BagFileParserFactory(snapshot_path)
             stop_gps_pos_topic_list = snapshot_parser.get_parser().get_messages(args.gps_topic)
-            stop_gps_pos_list = [(stop_gps_pos_topic_list[i][1].position.x, 
-                             stop_gps_pos_topic_list[i][1].position.y) for i in range(len(stop_gps_pos_topic_list))]
+            stop_gps_pos_list = [(stop_gps_pos_topic_list[i][1].latitude , 
+                             stop_gps_pos_topic_list[i][1].longitude) for i in range(len(stop_gps_pos_topic_list))]
         except IOError:
             print (' Cannot open the file, ignore the incident file: ', snapshot_path)
             pass
 
     # TODO else no frame data, only draw path
     map_name = '/'+os.path.splitext(os.path.basename(args.rosbag_path))[0]
-    gps_pos_topic_list = bag_parser.get_parser().get_messages(args.gps_topic) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].position.x:lat, gps_pos[1].position.y:lon
-    gps_pos_list = [(gps_pos_topic_list[i][1].position.x, 
-                     gps_pos_topic_list[i][1].position.y) for i in range(len(gps_pos_topic_list))]
+    gps_pos_topic_list = bag_parser.get_parser().get_messages(args.gps_topic) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].longitude:lat, gps_pos[1].latitude:lon
+    gps_pos_list = [(gps_pos_topic_list[i][1].latitude , 
+                     gps_pos_topic_list[i][1].longitude) for i in range(len(gps_pos_topic_list))]
 
     #timestamp = float(time_str) * 1e9
     #frame_data = Frame(parser.get_parser(), parser.start_time + timestamp) #1681451854074038952
@@ -544,27 +576,27 @@ def main():
 
     #map = Map(17, html_file_path, gps_pos_list)
     #map.draw_path(gps_pos_list)
-    all_joy = bag_parser.get_parser().get_messages("/joy") 
-    start_time = bag_parser.start_time
-    end_time = bag_parser.start_time + bag_parser.duration // 2
-    all_image = bag_parser.get_parser().get_messages("/CameraFront", 
-                                                     start_time = start_time, 
-                                                     end_time = end_time) 
-    img_index = 0
-    if all_image is None:
-        print("No image data")
-        return
+    # all_joy = bag_parser.get_parser().get_messages("/joy") 
+    # start_time = bag_parser.start_time
+    # end_time = bag_parser.start_time + bag_parser.duration // 2
+    # all_image = bag_parser.get_parser().get_messages("/CameraFront", 
+    #                                                  start_time = start_time, 
+    #                                                  end_time = end_time) 
+    # img_index = 0
+    # if all_image is None:
+    #     print("No image data")
+    #     return
     
-    for msg in all_image:
-        save_img(output_path, msg, img_index)
-        img_index = img_index + 1
+    # for msg in all_image:
+    #     save_img(output_path, msg, img_index)
+    #     img_index = img_index + 1
 
     html_file_path = output_path+map_name+'.html'
     map = Map(17, html_file_path, gps_pos_list, stop_gps_pos_list)
 
     map.draw_path()
     map.show_map()
-
+    map.save_map()
 
 if __name__ == "__main__":
     main()
