@@ -136,3 +136,5 @@ output/*
 rosbag_plot/output*
 .vscode/launch.json
 rosbag_plot/bus_icon*
+unittest_file/gt/*
+unittest_file/output/*

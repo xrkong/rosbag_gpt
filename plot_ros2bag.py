@@ -2,16 +2,20 @@
 import sqlite3
 from rosidl_runtime_py.utilities import get_message
 from rclpy.serialization import deserialize_message
-from sensor_msgs.msg import LaserScan
+import sensor_msgs.msg
 from cv_bridge import CvBridge
 from mcap.reader import make_reader
+import tf_transformations
+from sensor_msgs_py import point_cloud2 as pc2
+import open3d as o3d
+# import pclpy 
+# from pclpy import pcl
 
 import yaml
 import sys
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import random
 from PIL import Image
 import datetime
 import math
@@ -134,14 +138,14 @@ class mcapParser():
             return messages
 
     def get_msg_frame(self, topic_name:str, timestamp, duration=1e12):
-        print(f"get_msg_frame: {topic_name}")
+        # print(f"get_msg_frame: {topic_name}")
         reader = self.reader
         messages = []
         for msg in reader.iter_messages(topics=[topic_name], start_time=timestamp - duration/2, end_time=timestamp + duration/2):
             topic = deserialize_message(msg[2].data, get_message(msg[0].name))
             cur_timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
             messages.append([cur_timestamp, topic])
-        print(f"get_msg_frame: {len(messages)}")
+        print(f"{topic_name}: {len(messages)}")
         if len(messages) == 0:
             return None
         return messages[math.floor(len(messages)/2)]
@@ -155,28 +159,26 @@ class Frame():
     def __init__(self, parser, timestamp) -> None:
         try: 
             self.timestamp = timestamp
-            # Right priority
-            # self.scan_fl = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
-            # self.scan_fr = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
-            # self.scan_rl = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
-            # self.scan_rr = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
-            # Left priority cloud TODO: change to scan
+
+            # left priority in Australia
             self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/cloud", timestamp)
             self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/cloud", timestamp)
             self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/cloud", timestamp)
             self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/cloud", timestamp)
-            # Left priority scan
-            # self.scan_rr = parser.get_msg_frame("/lidar_safety/front_left/scan", timestamp)
-            # self.scan_rl = parser.get_msg_frame("/lidar_safety/front_right/scan", timestamp)
-            # self.scan_fr = parser.get_msg_frame("/lidar_safety/rear_left/scan", timestamp)
-            # self.scan_fl = parser.get_msg_frame("/lidar_safety/rear_right/scan", timestamp)
+            self.vld_rear = parser.get_msg_frame("/lidar/velodyne/front/cloud", timestamp)
+            self.vld_front = parser.get_msg_frame("/lidar/velodyne/rear/cloud", timestamp)
+
             self.cam_front = parser.get_msg_frame("/CameraFront", timestamp)
             self.cam_rear  = parser.get_msg_frame("/CameraRear", timestamp)
-            self.ori = parser.get_msg_frame("/ins0/orientation", timestamp) #ori[times]
-            self.gps_pos = parser.get_msg_frame("/ins0/gps_pos", timestamp) # gps_pos[ts][1].position.SLOT_TYPES.x
+
+            self.ori = parser.get_msg_frame("/imu/data", timestamp) #ori[times]
+            self.gps_pos = parser.get_msg_frame("/sbg/gps_pos", timestamp) # gps_pos[ts][1].position.SLOT_TYPES.x
             self.gps_vel = parser.get_msg_frame("/sbg/gps_vel", timestamp)
-            self.print_msg_timestamp()
-            self.print_bus_status()
+
+            # self.battery_percent = parser.get_messages("/battery_percent")
+            # self.battery_voltage = parser.get_messages("/battery_voltage")
+            # self.print_msg_timestamp()
+            # self.print_bus_status()
             dt = datetime.datetime.utcfromtimestamp(self.timestamp / 1e9)
             self.time_str = dt.strftime("%y-%m-%d-%H:%M:%S.%f")[:-3]
         except TypeError as e:
@@ -268,11 +270,62 @@ class Frame():
         self.print_time(gps_pos, "gps_pos")
         self.print_time(gps_vel, "gps_vel")
 
-    def print_bus_status(self):
-        ori=self.ori[1].angle.x
-        gps_pos=self.gps_pos[1].position#x,y,z
-        gps_vel=self.gps_vel[1].vel #x,y,z
-        print("ori:{:.7f}, lat:{:.7f}, lon:{:.7f}, vel:{:.3f}".format(math.degrees(ori), gps_pos.x, gps_pos.y, gps_vel.x))
+    def print_location(self):
+        quaternion = [self.ori[1].orientation.x, 
+                      self.ori[1].orientation.y, 
+                      self.ori[1].orientation.z, 
+                      self.ori[1].orientation.w]
+
+        # Convert quaternion to Euler angles
+        (roll, pitch, yaw) = tf_transformations.euler_from_quaternion(quaternion)
+        lat = self.gps_pos[1].latitude
+        lon = self.gps_pos[1].longitude
+
+        # Now you can use roll, pitch, and yaw
+        print("Roll:", roll)
+        print("Pitch:", pitch)
+        print("Yaw:", yaw)
+        print("Lat:{:.7f}, Lon:{:.7f}".format(lat, lon))
+        return [yaw, lat, lon]
+    
+    def print_battery(self):
+        print("Battery percent: ", self.battery_percent[1].data)
+        print("Battery voltage: ", self.battery_voltage[1].data)
+        return [self.battery_percent[1].data, self.battery_voltage[1].data]
+
+    def save_camera_image(self, abs_path:str):
+        bridge = CvBridge()
+        if self.cam_front is not None:
+            cv_img_front = bridge.imgmsg_to_cv2(self.cam_front[1], desired_encoding='passthrough')
+            front_output_path = os.path.join(abs_path, 'front.png')
+            cv2.imwrite(front_output_path, cv_img_front)
+            print("Image saved: front")
+        else:
+            front_output_path = None
+            print("No front camera data")
+        
+        if self.cam_rear is not None:
+            cv_img_rear = bridge.imgmsg_to_cv2(self.cam_rear[1], desired_encoding='passthrough')
+            rear_output_path = os.path.join(abs_path, 'rear.png')
+            cv2.imwrite(rear_output_path, cv_img_rear)
+            print("Image saved: rear")
+        else:
+            rear_output_path = None
+            print("No rear camera data")
+        
+        return [front_output_path, rear_output_path]
+    
+    def save_pcd(self, abs_path:str, pcd:sensor_msgs.msg.PointCloud2, topic_name:str="point_cloud"):
+        points = pc2.read_points(pcd, field_names=("x", "y", "z"), skip_nans=True)
+        # points_array = list(points)
+        points_list = np.array([[p[0], p[1], p[2]] for p in points], dtype=np.float32)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points_list[:, :3])  # Only x, y, z
+        # Save the point cloud as a PCD file
+        filename = os.path.join(abs_path, topic_name+".pcd")
+        o3d.io.write_point_cloud(filename, pcd)
+        print(f"{pcd} saved to {filename}")
+        return filename
 
     def plot_all(self, abs_path:str):
         #fig, axs = plt.subplots(2, 3, figsize=(10, 10), subplot_kw=dict(polar=True))
@@ -362,28 +415,35 @@ Map class
 [ ] add default bus icon
 '''
 class Map:
-    def __init__(self, zoom_start, file_path, trail_coordinates, incident_stop=None, bus_frame:Frame=None):  
-        self.zoom_start = zoom_start
-        self.path = [0,0]
-        if trail_coordinates is not None:
-            self.path = trail_coordinates
+    def __init__(self, 
+                 zoom_start:int, 
+                 output_path:str, 
+                 path_waypoints:np.array=None,  
+                 incident_waypoints:np.array=None, 
+                 bus_frame:Frame=None): 
+        self.zoom_start = zoom_start # for folium map
+        self.path = np.array([[0,0]]) 
+
+        if path_waypoints is not None:
+            self.path = path_waypoints
         elif bus_frame is not None:
             self.path = [[bus_frame.gps_pos[1].longitude, bus_frame.gps_pos[1].latitude]]
             #self.path = [sublist for sublist in orin_path if all(range_min <= item <= range_max for item in sublist)]
 
-        if incident_stop is not None:
-            self.stop = incident_stop
+        if incident_waypoints is not None:
+            self.stop = incident_waypoints
         else:
             self.stop = None
         
-        self.path = np.array(self.path)
-        self.path = self.path[self.path[:,0]>-35]
-        self.path = self.path[self.path[:,0]<-30]
-        self.path = self.path[self.path[:,1]>110]
-        self.path = self.path[self.path[:,1]<120]
+        # self.path = np.array(self.path)
+        # self.path = self.path[(self.path[:, 0] > -35) & 
+        #                       (self.path[:, 0] < -30) & 
+        #                       (self.path[:, 1] > 110) & 
+        #                       (self.path[:, 1] < 120)]
         self.pic_center = np.mean(self.path, 0) # TODO: chang the point
-        self.file_path = file_path
-        self.map = folium.Map(location = [-31.595436, 115.662379], zoom_start = self.zoom_start) # -31.595436, 115.662379 for Eglinton
+        self.output_path = output_path
+        self.map = folium.Map(location = [-31.595436, 115.662379], 
+                              zoom_start = self.zoom_start) # -31.595436, 115.662379 for Eglinton
         self.frame = bus_frame
     
     def draw_bus_lidar(self, lidar_path:str):
@@ -419,11 +479,10 @@ class Map:
         if self.map is not None and self.path is not None:
             self.pic_center = np.mean(self.path, 0)
             for i in range(len(self.path)-2):
-                if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
-                    folium.PolyLine(locations=self.path[i:i+2],     
-                                    color="blue",
-                                    weight=2, ).add_to(self.map)
-                    
+                # if math.dist(self.path[i], self.path[i+1]) < 0.0002: # 0.0002 ~20meters
+                folium.PolyLine(locations=self.path[i:i+2],     
+                                color="blue",
+                                weight=2, ).add_to(self.map)           
         #self.stop
         if self.map is not None and self.stop is not None:
             for i in range(len(self.stop)):
@@ -437,16 +496,22 @@ class Map:
         # else:
         #     print("No path data")
 
-    def show_map(self):
-        self.map.save(self.file_path)
-        webbrowser.open(self.file_path)
+    def show_html_map(self):
+        self.map.save(self.output_path)
+        webbrowser.open(self.output_path)
 
-    def save_map(self):
+    def save_html_map(self):
+        self.map.save(self.output_path)
+        return self.output_path
+
+    def save_csv_map(self):
         if self.stop:
-            csv_path = os.path.splitext(self.file_path)[0]+'_inc.csv'
+            # TODO: save the stops path
+            csv_path = os.path.splitext(self.output_path)[0]+'_inc.csv'
         else:
-            csv_path = os.path.splitext(self.file_path)[0]+'.csv'
-        np.savetxt(csv_path, self.path, delimiter=',', fmt='%s', header="Latitude, Longitude", comments='')
+            csv_path = os.path.splitext(self.output_path)[0]+'_gps.csv'
+        np.savetxt(csv_path, self.path, delimiter=',', fmt='%s', header="Latitude,Longitude", comments='')
+        return csv_path
 
 def is_valid_timestamp(timestamp, duration):
     """
@@ -509,15 +574,48 @@ def parse_args(args):
                         help="get the incident csv file.")
     return arg_parser.parse_args()
 
+def extract_csv_path(file_path):
+    # input a csv file, return the path waypoints
+    gps_csv = pd.read_csv(file_path)
+    gps_list = np.array(gps_csv[['Latitude', 'Longitude']])
+    return gps_list
+
+def extract_rosbag_path(file_path, waypoint_topic_name):
+    # input a rosbag file and the waypoint topic name, return the path waypoints
+    try: 
+        bag_parser = BagFileParserFactory(file_path)
+    except IOError:
+        print ('Cannot open file: ' + file_path + ', please check the rosbag file path')
+    gps_topic_list = bag_parser.get_parser().get_messages(waypoint_topic_name) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].longitude:lat, gps_pos[1].latitude:lon
+    gps_list = np.array([[gps_topic_list[i][1].latitude , 
+                          gps_topic_list[i][1].longitude] 
+                            for i in range(len(gps_topic_list))])
+    return gps_list
+
+def extract_rosbag_images(file_path, image_topic_name):
+    # input a rosbag file and the waypoint topic name, return the path waypoints
+    try: 
+        bag_parser = BagFileParserFactory(file_path)
+    except IOError:
+        print ('Cannot open file: ' + file_path + ', please check the rosbag file path')
+    gps_topic_list = bag_parser.get_parser().get_messages(image_topic_name) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].longitude:lat, gps_pos[1].latitude:lon
+    gps_list = np.array([[gps_topic_list[i][1].latitude , 
+                          gps_topic_list[i][1].longitude] 
+                            for i in range(len(gps_topic_list))])
+    return gps_list
+
 def main():
     print(sys.argv[1:])
     args = parse_args(sys.argv[1:])
 
-    gps_csv = pd.read_csv(args.gps_csv_path)
-    gps_pos_list = [(gps_csv['Latitude'][i], gps_csv['Longitude'][i]) for i in range(len(gps_csv))]
+    gps_pos_list = extract_csv_path(args.gps_csv_path)
+    stop_gps_pos_list = extract_csv_path(args.incident_csv_path)
 
-    incident_csv = pd.read_csv(args.incident_csv_path)
-    stop_gps_pos_list = [(incident_csv['Latitude'][i], incident_csv['Longitude'][i]) for i in range(len(incident_csv))]
+    # gps_csv = pd.read_csv(args.gps_csv_path)
+    # gps_pos_list = [(gps_csv['Latitude'][i], gps_csv['Longitude'][i]) for i in range(len(gps_csv))]
+
+    # incident_csv = pd.read_csv(args.incident_csv_path)
+    # stop_gps_pos_list = [(incident_csv['Latitude'][i], incident_csv['Longitude'][i]) for i in range(len(incident_csv))]
 
     try:    
         bag_parser = BagFileParserFactory(args.rosbag_path)
@@ -595,8 +693,8 @@ def main():
     map = Map(17, html_file_path, gps_pos_list, stop_gps_pos_list)
 
     map.draw_path()
-    map.show_map()
-    map.save_map()
+    map.show_html_map()
+    map.save_csv_map()
 
 if __name__ == "__main__":
     main()
