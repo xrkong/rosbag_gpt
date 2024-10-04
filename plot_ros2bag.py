@@ -7,6 +7,8 @@ from cv_bridge import CvBridge
 from mcap.reader import make_reader
 import tf_transformations
 from sensor_msgs_py import point_cloud2 as pc2
+import pdfkit
+from jinja2 import Environment, FileSystemLoader
 import open3d as o3d
 # import pclpy 
 # from pclpy import pcl
@@ -63,7 +65,6 @@ class BagFileParserFactory():
 
 '''
 Load .db3 ros2bag file 
-[ ] modify get_msg_frame duration as a parameter
 '''
 class db3Parser():
     def __init__(self, bag_file):
@@ -103,12 +104,8 @@ class db3Parser():
             return None
         # Deserialise all and timestamp them
 
-class Inference():
-    pass
-
 '''
 Load .mcap ros2bag file 
-[ ] modify get_msg_frame duration
 '''
 class mcapParser():
     def __init__(self, file:str) -> None:
@@ -152,8 +149,6 @@ class mcapParser():
 
 '''
 data frame from a parser
-[ ] convert cloud to scan or add cloud plot
-[ ] plot data based on topic type, e.g. scan, cloud, image, pose, gps
 '''
 class Frame():
     def __init__(self, parser, timestamp) -> None:
@@ -185,64 +180,66 @@ class Frame():
             print(f"Error: {e}")
             return None
         
-    def save_frame(self, abs_path:str):
+    def generate_report(self, abs_path:str):
         '''
-        TODO: save image and data as a file
+        [ ] merge this function into Class Report
         '''
-        dpi_size = 1500
-        fl = self.scan_fl[1]
-        fr = self.scan_fr[1]
-        rl = self.scan_rl[1]
-        rr = self.scan_rr[1]
+        # Data from the autonomous shuttle bus
+        date_time = "2024-10-04 14:30:00"  # Example date and time
+        gps_location = "Latitude: -31.9505, Longitude: 115.8605"  # Example GPS location
+        front_image_path = "./unittest_file/gt/front.png"  
+        front_pcd_path = "./unittest_file/gt/velodyne_front.png"  
+        rear_image_path = "./unittest_file/gt/rear.png"   
+        rear_pcd_path = "./unittest_file/gt/velodyne_rear.png"
+        # Data for the report
+        date_time = "2024-10-04 14:30:00"  # Example date and time
+        path_html = "./unittest_file/gt/waypoints_and_stops.html"  # Example path HTML file
+        path_explanation = "This image shows the overall path taken by the shuttle."  # Input your path explanation
 
-        r = [x/ 10 for x in fl._ranges ]
-        theta = np.linspace(fl._angle_min, fl._angle_max, len(r), endpoint=False) 
-        fig = plt.figure()
-        axs = fig.add_subplot(1, 1, 1, projection='polar')
+        # Incident data (you can add more incidents as needed)
+        incidents = [
+            {
+                "gps": "Latitude: -31.9505, Longitude: 115.8605",
+                "date_time": "2024-10-04 14:35:00",
+                "front_camera": front_image_path,
+                "front_lidar": front_pcd_path,
+                "rear_camera": rear_image_path,
+                "rear_lidar": rear_pcd_path,
+                "front_explanation": "This is the front camera view during the incident.",
+                "rear_explanation": "This is the rear camera view during the incident.",
+            },
+            {
+                "gps": "Latitude: -31.9525, Longitude: 115.8625",
+                "date_time": "2024-10-04 14:40:00",
+                "front_camera": front_image_path,
+                "front_lidar": front_pcd_path,
+                "rear_camera": rear_image_path,
+                "rear_lidar": rear_pcd_path,
+                "front_explanation": "This is the front camera view during the incident.",
+                "rear_explanation": "This is the rear camera view during the incident.",
+            }
+        ]
 
-        axs.plot(theta, r, linewidth=0) # no line
-        # Fill the area enclosed by the line
-        axs.fill(theta, r, alpha=0.7) # fill area
-        axs.set_theta_zero_location('NW') 
-        axs.set_theta_direction(-1) # clockwise axis Z is down
-        plt.axis('off')
-        if not os.path.exists(abs_path):
-            os.makedirs(abs_path)         
-        plt.savefig(abs_path+'lidar_safety_fl.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
-        fig.clf()
+        # Create a basic environment for the HTML report template
+        env = Environment(loader=FileSystemLoader('.'))
+        template = env.get_template('report_template.html')
 
-        r = [x/ 10 for x in fr._ranges ]
-        theta = np.linspace(fr._angle_min, fr._angle_max, len(r), endpoint=False) 
-        axs = fig.add_subplot(1, 1, 1, projection='polar')
-        axs.plot(theta, r, linewidth=0) # no line
-        axs.fill(theta, r, alpha=0.7) # fill area
-        axs.set_theta_zero_location('NE')
-        axs.set_theta_direction(-1) # clockwise axis Z is down
-        plt.axis('off')       
-        plt.savefig(abs_path+'lidar_safety_fr.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
-        fig.clf()
+        # Render the template with the data
+        html_content = template.render(
+            date_time=date_time,
+            path_html=path_html,
+            path_explanation=path_explanation,
+            incidents=incidents
+        )
 
-        r = [x/ 10 for x in rl._ranges ]
-        theta = np.linspace(rl._angle_min, rl._angle_max, len(r), endpoint=False)
-        axs = fig.add_subplot(1, 1, 1, projection='polar')
-        axs.plot(theta, r, linewidth=0) # no line
-        axs.fill(theta, r, alpha=0.7) # fill area
-        axs.set_theta_zero_location('SW')
-        axs.set_theta_direction(-1) # clockwise axis Z is down
-        plt.axis('off')
-        plt.savefig(abs_path+'lidar_safety_rl.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
-        fig.clf()
+        # Write the HTML content to a file (optional for debugging)
+        with open('report.html', 'w') as file:
+            file.write(html_content)
 
-        r = [x/ 10 for x in rr._ranges ]
-        theta = np.linspace(rr._angle_min, rr._angle_max, len(r), endpoint=False)
-        axs = fig.add_subplot(1, 1, 1, projection='polar')
-        axs.plot(theta, r, linewidth=0) # no line
-        axs.fill(theta, r, alpha=0.7) # fill area
-        axs.set_theta_zero_location('SE')
-        axs.set_theta_direction(-1) # clockwise axis Z is down
-        plt.axis('off')
-        plt.savefig(abs_path+'lidar_safety_rr.png', dpi=dpi_size, bbox_inches='tight', transparent=True)
-        return abs_path
+        # Convert the HTML report to PDF
+        pdfkit.from_file('report.html', 'autonomous_shuttle_report.pdf')
+
+        print("Report generated: autonomous_shuttle_report.pdf")
     
     def print_time(self, timestamp, name:str): 
         try:
@@ -315,109 +312,68 @@ class Frame():
         
         return [front_output_path, rear_output_path]
     
-    def save_pcd(self, abs_path:str, pcd:sensor_msgs.msg.PointCloud2, topic_name:str="point_cloud"):
-        points = pc2.read_points(pcd, field_names=("x", "y", "z"), skip_nans=True)
+    def msg_to_o3d_pcd(self, msg : sensor_msgs.msg.PointCloud2):
+        points = pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
         # points_array = list(points)
         points_list = np.array([[p[0], p[1], p[2]] for p in points], dtype=np.float32)
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points_list[:, :3])  # Only x, y, z
+        pcd.points = o3d.utility.Vector3dVector(points_list[:, :3])
+        return pcd
+    
+    def save_pcd(self, 
+                 output_path : str, 
+                 pcd : sensor_msgs.msg.PointCloud2, 
+                 topic_name : str="point_cloud"):
+        pcd = self.msg_to_o3d_pcd(pcd)
         # Save the point cloud as a PCD file
-        filename = os.path.join(abs_path, topic_name+".pcd")
+        filename = os.path.join(output_path, topic_name+".pcd")
         o3d.io.write_point_cloud(filename, pcd)
         print(f"{pcd} saved to {filename}")
-        return filename
+        return [filename, pcd]
+    
+    def save_pcd2png(self, 
+                     output_path : str, 
+                     pcd_msg : sensor_msgs.msg.PointCloud2, 
+                     output_name : str="point_cloud"):
+        
+        pcd_o3d = self.msg_to_o3d_pcd(pcd_msg) 
+        # pcd = o3d.io.read_point_cloud(o3d_pcd)
+        points = np.asarray(pcd_o3d.points)
+        XMAX = np.max(points[:, 0])
+        YMAX = np.max(points[:, 1])
+        ZMAX = np.max(points[:, 2])  
 
-    def plot_all(self, abs_path:str):
-        #fig, axs = plt.subplots(2, 3, figsize=(10, 10), subplot_kw=dict(polar=True))
-        fig = plt.figure()
-        fl = self.scan_fl[1]
-        fr = self.scan_fr[1]
-        rl = self.scan_rl[1]
-        rr = self.scan_rr[1]
-        ring_lim = 3 # 5meters as the limit of the plot
+        # Create a visualizer object
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
 
-        r = [x for x in fl._ranges ]
-        theta = np.linspace(fl._angle_min, fl._angle_max, len(r), endpoint=False) 
-        axs = fig.add_subplot(2, 3, 1, projection='polar')
-        axs.plot(theta, r, linewidth=0) # no line
-        # Fill the area enclosed by the line
-        axs.fill(theta, r, alpha=0.7) # fill area
-        axs.set_theta_zero_location('NW') 
-        axs.set_title('front left', fontweight='bold')
-        axs.set_ylim(0, ring_lim)
-        axs.set_rlabel_position(0) 
-        axs.set_theta_direction(-1) # clockwise axis Z is down
+        # Add the point cloud to the visualizer
+        vis.add_geometry(pcd_o3d)
+        ctr = vis.get_view_control()
 
-        r = [x for x in fr._ranges ]
-        theta = np.linspace(fr._angle_min, fr._angle_max, len(r), endpoint=False) 
-        axs = fig.add_subplot(2, 3, 3, projection='polar')
-        axs.plot(theta, r, color='r', linewidth=0)
-        axs.fill(theta, r, alpha=0.7)
-        axs.set_theta_zero_location('NE')
-        axs.set_title('front right', fontweight='bold')
-        axs.set_ylim(0, ring_lim)
-        axs.set_rlabel_position(0)
-        axs.set_theta_direction(-1)
+        bbox = pcd_o3d.get_axis_aligned_bounding_box()
+        center = bbox.get_center()
 
-        r = [x for x in rl._ranges ]
-        theta = np.linspace(rl._angle_min, rl._angle_max, len(r), endpoint=False) 
-        axs = fig.add_subplot(2, 3, 4, projection='polar')
-        axs.plot(theta, r, color='r', linewidth=0)
-        # Fill the area enclosed by the line
-        axs.fill(theta, r, alpha=0.7)
-        axs.set_theta_zero_location('SW')
-        axs.set_title('rear left', fontweight='bold')
-        axs.set_ylim(0, ring_lim)
-        axs.set_rlabel_position(0)        
-        axs.set_theta_direction(-1)
+        ctr.set_front([0,0,1])  
+        ctr.set_lookat(center)        
+        ctr.set_up([1,0,0])         
+        ctr.set_zoom(0.5)  
 
-        r = [x for x in rr._ranges ]
-        theta = np.linspace(rr._angle_min, rr._angle_max, len(r), endpoint=False) 
-        axs = fig.add_subplot(2, 3, 6, projection='polar')
-        axs.plot(theta, r, color='r', linewidth=0.0)
-        # Fill the area enclosed by the line
-        axs.fill(theta, r, alpha=0.7)
-        axs.set_theta_zero_location('SE')
-        axs.set_ylim(0, ring_lim)
-        axs.set_rlabel_position(0)
-        axs.set_title('rear right', fontweight='bold')
-        axs.set_theta_direction(-1)
+        # Visualize the point cloud with the adjusted camera position
+        # vis.run()
+        output = os.path.join(output_path, output_name+".png")
+        vis.capture_screen_image(output, do_render=True)
+        vis.destroy_window()
 
-        bridge = CvBridge()
-        if self.cam_front is not None:
-            cv_img_front = bridge.imgmsg_to_cv2(self.cam_front[1], desired_encoding='passthrough')
-            img_front = cv2.cvtColor(cv_img_front, cv2.COLOR_BGR2RGB)
-            axs = fig.add_subplot(2, 3, 2)
-            axs.set_title('Camera Front', fontweight='bold')
-            axs.axis('off')
-            axs.imshow(img_front)
-        else:
-            print("No front camera data")
-            
-        if self.cam_rear is not None:
-            cv_img_rear = bridge.imgmsg_to_cv2(self.cam_rear[1], desired_encoding='passthrough')
-            img_rear = cv2.cvtColor(cv_img_rear, cv2.COLOR_BGR2RGB)
-            axs = fig.add_subplot(2, 3, 5)
-            axs.set_title('Camera Rear', fontweight='bold')
-            axs.axis('off')
-            axs.imshow(img_rear)
-        else:
-            print("No rear camera data")
-            
-        fig.suptitle(self.time_str)
-        if not os.path.exists(abs_path):
-            os.makedirs(abs_path)   
-        plt.savefig(abs_path+self.time_str+'plot_.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        return output
 
 '''
 Map class
-[ ] add default bus icon
 '''
 class Map:
     def __init__(self, 
-                 zoom_start:int, 
-                 output_path:str, 
+                 zoom_start:int=17, 
+                 output_path:str=None, 
                  path_waypoints:np.array=None,  
                  incident_waypoints:np.array=None, 
                  bus_frame:Frame=None): 
@@ -440,7 +396,7 @@ class Map:
         #                       (self.path[:, 0] < -30) & 
         #                       (self.path[:, 1] > 110) & 
         #                       (self.path[:, 1] < 120)]
-        self.pic_center = np.mean(self.path, 0) # TODO: chang the point
+        self.pic_center = np.mean(self.path, 0) # [ ] change the map center
         self.output_path = output_path
         self.map = folium.Map(location = [-31.595436, 115.662379], 
                               zoom_start = self.zoom_start) # -31.595436, 115.662379 for Eglinton
@@ -506,12 +462,122 @@ class Map:
 
     def save_csv_map(self):
         if self.stop:
-            # TODO: save the stops path
             csv_path = os.path.splitext(self.output_path)[0]+'_inc.csv'
         else:
             csv_path = os.path.splitext(self.output_path)[0]+'_gps.csv'
         np.savetxt(csv_path, self.path, delimiter=',', fmt='%s', header="Latitude,Longitude", comments='')
         return csv_path
+
+
+# class Incident():
+#     def __init__(self, 
+#                     timestamp : float = 0.0, 
+#                     gps_pos = None, 
+#                     image = None, 
+#                     pcd = None,
+#                     explanation : str = None):
+#         self.timestamp = timestamp
+#         self.gps_pos = gps_pos
+#         self.image = image
+#         self.pcd = pcd
+#         self.explanation = explanation
+
+'''
+Gnereate report based on Map() and Frame()
+'''
+class Report():
+    def __init__(self, 
+                 template_html : str = None):
+        self.template_path = template_html
+        self.history_path = Map()
+        self.history_path_content = "This image shows the overall path taken by the shuttle."
+        self.stops_dict = []
+        self.stops_data = [] # list of Frame()
+        # extract path 
+
+    def add_map_from_csv(self, path : str):
+        # update self.history_path
+        pass
+        
+    def add_map_from_rosbag(self, path_rosbag : BagFileParserFactory):
+        # update self.history_path
+        pass
+
+    def add_incident_from_rosbag(self, stop_rosbag : BagFileParserFactory):
+        # return a list of incident Frames. Called by add_incident
+        pass
+
+    def add_explanation(self):
+        # llm inference images and lidars
+        pass
+
+    def add_incident(self, data : Frame):
+        '''
+        required data: timestamp, gps_pos, image, pcd, explanation
+        {
+            "gps": "Latitude: -31.9505, Longitude: 115.8605",
+            "date_time": "2024-10-04 14:35:00",
+            "front_camera": front_image_path,
+            "front_lidar": front_pcd_path,
+            "rear_camera": rear_image_path,
+            "rear_lidar": rear_pcd_path,
+            "front_explanation": "This is the front camera view during the incident.",
+            "rear_explanation": "This is the rear camera view during the incident.",
+        }
+        '''
+        output_path = os.path.dirname(os.path.abspath(__file__))
+
+        [front_cam, rear_cam] = data.save_camera_image()
+
+        rear_pcd = data.save_pcd2png(output_path, data.vld_rear[1], "velodyne_rear")
+        front_pcd = data.save_pcd2png(output_path, data.vld_front[1], "velodyne_front")
+
+        # [ ] use add_explanation
+        front_exp = "This is the front camera view during the incident."
+        rear_exp = "This is the rear camera view during the incident."
+
+        out = {
+                "gps": f"Latitude: {data.gps_pos[1].latitude:.5f}, Longitude: {data.gps_pos[1].longitude:.5f}",
+                "date_time": data.time_str,
+                "front_camera": front_cam,
+                "rear_camera": rear_cam,
+                "front_lidar": front_pcd,
+                "rear_lidar": rear_pcd,
+                "front_explanation": front_exp,
+                "rear_explanation": rear_exp,
+            }
+        self.stops_dict.append(out)
+
+    def generate_report(self):
+        # generate the report based on the template, and src files
+
+        #
+        self.add_map_from_rosbag()
+
+        for stop in self.stops_data:
+            self.add_incident(stop)
+
+    
+        # Create a basic environment for the HTML report template
+        env = Environment(loader=FileSystemLoader('.'))
+        template = env.get_template('report_template.html')
+
+        # [ ] Render the template with the data
+        html_content = template.render(
+            # date_time=self.history_path.time_str, based on map rosbag
+            # path_html=self.history_path, based on map
+            # path_explanation=self.history_path_content, based on map
+            # incidents=self.stops_dict # based on stops_data
+        )
+
+        # Write the HTML content to a file (optional for debugging)
+        with open('report.html', 'w') as file:
+            file.write(html_content)
+
+        pass
+
+    def save_report(self, output_path : str):
+        pass
 
 def is_valid_timestamp(timestamp, duration):
     """
@@ -659,7 +725,7 @@ def main():
             print (' Cannot open the file, ignore the incident file: ', snapshot_path)
             pass
 
-    # TODO else no frame data, only draw path
+    # else no frame data, only draw path
     map_name = '/'+os.path.splitext(os.path.basename(args.rosbag_path))[0]
     gps_pos_topic_list = bag_parser.get_parser().get_messages(args.gps_topic) #/sbg/ekf_nav /ins0/gps_pos gps_pos[1].longitude:lat, gps_pos[1].latitude:lon
     gps_pos_list = [(gps_pos_topic_list[i][1].latitude , 

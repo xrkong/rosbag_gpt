@@ -1,8 +1,12 @@
 import unittest
 from plot_ros2bag import * 
 from sensor_msgs.msg import Image
-import numpy as np
+import pdfkit
+from PIL import Image
+from jinja2 import Environment, FileSystemLoader
 import os
+import datetime
+import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 # ground truth
@@ -20,15 +24,19 @@ GT_HTML_STOPS = "./unittest_file/gt/stops.html"
 
 GT_PNG_FRONT = "./unittest_file/gt/front.png"
 GT_PNG_REAR = "./unittest_file/gt/rear.png"
+GT_PNG_VLD_FRONT = "./unittest_file/gt/velodyne_front.png"
+GT_PNG_VLD_REAR = "./unittest_file/gt/velodyne_rear.png"
 GT_PCD_VLD_FRONT = "./unittest_file/gt/velodyne_front.pcd"
 GT_PCD_VLD_REAR = "./unittest_file/gt/velodyne_rear.pcd"
 
+OUTPUT = "./unittest_file/output"
+
 class TestUtils(unittest.TestCase):
     '''
-    - [x] Input a file path, validate the rosbag file. If failed, throw an error.
-    - [x] Input a message list, check the message in the rosbag or not.
-    - [x] Input a topic name, extract the message list.
-    - [x] Input a topic name and a time stamp, return the closest message.
+    - Input a file path, validate the rosbag file. If failed, throw an error.
+    - Input a message list, check the message in the rosbag or not.
+    - Input a topic name, extract the message list.
+    - Input a topic name and a time stamp, return the closest message.
     '''
 
     # ==========================
@@ -87,15 +95,15 @@ class TestUtils(unittest.TestCase):
         parser = mcapParser(GT_MCAP_STOPS)
         image = parser.get_msg_frame(TOPIC_NAME, TIME_STAMP)
         self.assertIs(type(image[0]), float)
-        self.assertIs(type(image[1]), Image)
+        self.assertIs(type(image[1]), sensor_msgs.msg.Image)
 
 class TestMap(unittest.TestCase):
     '''
-    - [ ] Input a rosbag and gps topic name, retun a html path file.
-    - [ ] Input a rosbag and gps topic name, retun a csv path file.
-    - [ ] Input a rosbag, regular gps topic name, and incident topic name, return a html incident path map.
-    - [ ] Input a regular rosbag, and a incident rosbag, return a html incident path map.
-    - [ ] Input two csv file (regular and incident), return a html incident path map.
+    - Input a rosbag and gps topic name, retun a html path file.
+    - Input a rosbag and gps topic name, retun a csv path file.
+    - Input a rosbag, regular gps topic name, and incident topic name, return a html incident path map.
+    - Input a regular rosbag, and a incident rosbag, return a html incident path map.
+    - Input two csv file (regular and incident), return a html incident path map.
     '''
     def test_pathbag2csv(self):
         path = extract_rosbag_path(GT_MCAP_WAYPOINTS, "/sbg/gps_pos")
@@ -175,19 +183,17 @@ class TestMap(unittest.TestCase):
         file_name = map.save_html_map()
         self.assertEqual(os.path.getsize(file_name), os.path.getsize(GT_HTML_WAYPOINTS), "file size not match")
 
-
 class TestSensors(unittest.TestCase):
     '''
-    - [ ] Input a rosbag file and a timestamp, visualize pointcloud and images into a single file.
-    - [ ] Input a rosbag file and a timestamp, save pointcloud and images into a single file.
-    - [ ] Input a rosbag file, a timestamp, and a saving path, save all pointcloud and images to the saving path.
-    - [ ] Input a rosbag, a image topics, and a saving path, extract images to the given path.
-    - [ ] Input a rosbag, a pcd topics, and a saving path, extract point cloud files to the given path.
+    - Input a rosbag file and a timestamp, visualize pointcloud and images into a single file.
+    - Input a rosbag file and a timestamp, save pointcloud and images into a single file.
+    - Input a rosbag file, a timestamp, and a saving path, save all pointcloud and images to the saving path.
+    - Input a rosbag, a image topics, and a saving path, extract images to the given path.
+    - Input a rosbag, a pcd topics, and a saving path, extract point cloud files to the given path.
     '''
     def setUp(self):
         self.parser = BagFileParserFactory(GT_MCAP_STOPS)
         self.timstamp = 1725329453522752369 #1725329433.522752369 or 1725330646.261834535
-        self.output_path = "./unittest_file/output"
 
     def test_bus_status(self):
         frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
@@ -209,17 +215,20 @@ class TestSensors(unittest.TestCase):
 
     def test_save_images(self):
         frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
-        [front_path, rear_path] = frame_data.save_camera_image(self.output_path)
+        [front_path, rear_path] = frame_data.save_camera_image(OUTPUT)
 
+        # compare the image content
         front = cv2.imread(front_path, cv2.IMREAD_GRAYSCALE)
         rear = cv2.imread(rear_path, cv2.IMREAD_GRAYSCALE)
 
         gt_front = cv2.imread(GT_PNG_FRONT, cv2.IMREAD_GRAYSCALE)
         gt_rear = cv2.imread(GT_PNG_REAR, cv2.IMREAD_GRAYSCALE)
 
+        # compare the image size
         self.assertEqual(front.shape, gt_front.shape, "Front Images have different sizes")
         self.assertEqual(rear.shape, gt_rear.shape, "Rear Images have different sizes")
 
+        # compare the image similarity
         score, _ = ssim(front, gt_front, full=True)
         self.assertGreater(score, 0.99, "Front Images have different content")
 
@@ -228,16 +237,42 @@ class TestSensors(unittest.TestCase):
     
     def test_save_pcd(self):
         frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
-        path = frame_data.save_pcd(self.output_path, frame_data.vld_rear[1], "velodyne_rear")
+        [path, _] = frame_data.save_pcd(OUTPUT, frame_data.vld_rear[1], "velodyne_rear")
         self.assertEqual(os.path.getsize(path), 
                          os.path.getsize(GT_PCD_VLD_REAR), 
                          "file size not match")
 
-    def test_plot_pcd(self):
+    def test_save_pcd2png(self):
         '''
         Visualizate point cloud data into single image file (PNG). 
         ready to send to inference
         '''
+
+        frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
+        output = frame_data.save_pcd2png(OUTPUT, 
+                                       frame_data.vld_rear[1], 
+                                       "velodyne_rear")
+
+        gt = cv2.imread(GT_PNG_VLD_REAR, cv2.IMREAD_GRAYSCALE)
+        out = cv2.imread(output, cv2.IMREAD_GRAYSCALE)
+
+        self.assertEqual(out.shape, gt.shape, "Images have different sizes")
+        score, _ = ssim(gt, out, full=True)
+        self.assertGreater(score, 0.99, "Front Images have different content")
+
+class TestReport(unittest.TestCase):
+    '''
+    - [ ] input a stop rosbag, a path rosbag and a output path, generate all files.
+    - [ ] input a src path and a template file, generate a html report.
+    - [ ] input a html report, convert to pdf.
+    '''
+    def setUp(self):
+        pass
+
+    def test_generate_incident(self):
+        self.fail("Not implemented yet")
+
+    def test_generate_html(self):
         self.fail("Not implemented yet")
 
     def test_generate_report(self):
@@ -251,4 +286,8 @@ class TestSensors(unittest.TestCase):
         - [ ] Front and rear velodyne point cloud data
         - [ ] Images analysis (e.g. object detection, lane detection)
         '''
+
+        frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
+        frame_data.generate_report(OUTPUT)
+
         self.fail("Not implemented yet")
