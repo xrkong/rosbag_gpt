@@ -66,33 +66,33 @@ class TestUtils(unittest.TestCase):
     def test_db3_parser(self):
         import sqlite3
         with self.assertRaises(sqlite3.DatabaseError):
-            db3Parser(GT_MCAP_STOPS)
+            Db3Parser(GT_MCAP_STOPS)
 
     # ===============
     # mcap rosbag test
     # ===============
 
     def test_mcap_parser(self):
-        parser = mcapParser(GT_MCAP_STOPS)
+        parser = McapParser(GT_MCAP_STOPS)
         self.assertTrue(parser is not None)
 
     def test_get_messages(self):
         TOPIC_NAME = "/CameraFront"
         TOPIC_LENGTH = 343 ##18 images in the rosbag
-        parser = mcapParser(GT_MCAP_STOPS)
+        parser = McapParser(GT_MCAP_STOPS)
         image_list = parser.get_messages(TOPIC_NAME)
         self.assertTrue(len(image_list) == TOPIC_LENGTH)
 
     def test_get_empty_messages(self):
         TOPIC_NAME = "/CameraXXXX" # fake topic name
-        parser = mcapParser(GT_MCAP_STOPS)
+        parser = McapParser(GT_MCAP_STOPS)
         image_list = parser.get_messages(TOPIC_NAME)
         self.assertIsNone(image_list)
 
     def test_get_msg_frame(self):
         TOPIC_NAME = "/CameraFront"
         TIME_STAMP = 1725329305498373948 
-        parser = mcapParser(GT_MCAP_STOPS)
+        parser = McapParser(GT_MCAP_STOPS)
         image = parser.get_msg_frame(TOPIC_NAME, TIME_STAMP)
         self.assertIs(type(image[0]), float)
         self.assertIs(type(image[1]), sensor_msgs.msg.Image)
@@ -192,7 +192,7 @@ class TestSensors(unittest.TestCase):
     - Input a rosbag, a pcd topics, and a saving path, extract point cloud files to the given path.
     '''
     def setUp(self):
-        self.parser = BagFileParserFactory(GT_MCAP_STOPS)
+        self.parser = BagFileParserFactory(GT_MCAP_STOPS, duration=1e12) # must be 1e12 (~100sec)
         self.timstamp = 1725329453522752369 #1725329433.522752369 or 1725330646.261834535
 
     def test_bus_status(self):
@@ -267,15 +267,10 @@ class TestReport(unittest.TestCase):
     - [ ] input a html report, convert to pdf.
     '''
     def setUp(self):
-        pass
-
-    def test_generate_incident(self):
-        self.fail("Not implemented yet")
+        self.parser = BagFileParserFactory(GT_MCAP_STOPS)
+        self.timstamp = 1725329453522752369
 
     def test_generate_html(self):
-        self.fail("Not implemented yet")
-
-    def test_generate_report(self):
         '''
         Generate a report for a given timestamp.
         Report includes:
@@ -286,8 +281,24 @@ class TestReport(unittest.TestCase):
         - [ ] Front and rear velodyne point cloud data
         - [ ] Images analysis (e.g. object detection, lane detection)
         '''
+        report = Report(GT_MCAP_WAYPOINTS, 
+                        GT_MCAP_STOPS, 
+                        "./resources/", 
+                        "./resources/report_template.html")
+        
+        report.generate_report()
 
-        frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
-        frame_data.generate_report(OUTPUT)
+        # self.fail("Not implemented yet")
 
-        self.fail("Not implemented yet")
+    def test_add_explaination(self):    
+        '''
+        Add explaination to the report.
+        '''
+        report = Report(GT_MCAP_WAYPOINTS, 
+                        GT_MCAP_STOPS, 
+                        "./resources/", 
+                        "./resources/report_template.html")
+        
+        content = report.add_image_explanation(GT_PNG_FRONT, "front")
+        self.assertTrue(content is not None)
+

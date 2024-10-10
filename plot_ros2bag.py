@@ -10,8 +10,15 @@ from sensor_msgs_py import point_cloud2 as pc2
 import pdfkit
 from jinja2 import Environment, FileSystemLoader
 import open3d as o3d
+import time
+import json
+# from typing import Dict, List, Union
+from openai import OpenAI
+from dotenv import find_dotenv, load_dotenv
 # import pclpy 
 # from pclpy import pcl
+
+_ = load_dotenv(find_dotenv())
 
 import yaml
 import sys
@@ -29,129 +36,102 @@ import folium
 import webbrowser
 import base64
 
+
 '''
 Ros2bag file parser factory class
 '''
-class BagFileParserFactory():
-    def __init__(self, bag_file:str): 
+class BagFileParserFactory:
+    def __init__(self, bag_file: str, duration: int = None):
         self.bag_file = bag_file
-        self.parser = None
-        self.file_type = None
         self.file_type = self.get_file_type()
-        print("start parsing...")
+        self.parser = None
+        self.load_metadata()
 
-        with open(os.path.dirname(self.bag_file) + "/metadata.yaml", 'r') as stream:
+        if self.file_type == "db3":
+            self.parser = Db3Parser(self.bag_file, duration)
+        elif self.file_type == "mcap":
+            self.parser = McapParser(self.bag_file, duration)
+        else:
+            raise ValueError("Unsupported file type.")
+
+    def get_file_type(self) -> str:
+        if self.bag_file.endswith(".db3"):
+            return "db3"
+        elif self.bag_file.endswith(".mcap"):
+            return "mcap"
+        else:
+            raise ValueError("Unsupported file type.")
+
+    def load_metadata(self):
+        metadata_file = os.path.join(os.path.dirname(self.bag_file), "metadata.yaml")
+        with open(metadata_file, 'r') as stream:
             self.metadata = yaml.safe_load(stream)
             self.start_time = self.metadata['rosbag2_bagfile_information']["starting_time"]['nanoseconds_since_epoch']
             self.duration = self.metadata['rosbag2_bagfile_information']["duration"]['nanoseconds']
 
-        if self.file_type == "db3":
-            self.parser = db3Parser(self.bag_file)
-        elif self.file_type == "mcap":
-            self.parser = mcapParser(self.bag_file)
-        print("parsing done")
-    
-    def get_file_type(self):
-        if self.bag_file.split(".")[-1]=="db3":
-            return "db3"
-        elif self.bag_file.split(".")[-1]=="mcap":
-            return "mcap"
-        else:
-            print("Error: unknown file type")
-            exit(1)
-    
     def get_parser(self):
         return self.parser
 
 '''
 Load .db3 ros2bag file 
 '''
-class db3Parser():
-    def __init__(self, bag_file):
-
-        # try:
+class Db3Parser:
+    def __init__(self, bag_file: str, duration: int = 5e6):
+        self.duration = duration
         self.conn = sqlite3.connect(bag_file)
         self.cursor = self.conn.cursor()
-            ## create a message type map
-        topics_data = self.cursor.execute("SELECT id, name, type FROM topics").fetchall()
-        self.topic_type = {name_of:type_of for id_of,name_of,type_of in topics_data}
-        self.topic_id = {name_of:id_of for id_of,name_of,type_of in topics_data}
-        self.topic_msg_message = {name_of:get_message(type_of) for id_of,name_of,type_of in topics_data}
-
-        # except sqlite3.Error as e:
-        #     print(f"Error: {e}")
-            
+        self.load_topics()
 
     def __del__(self):
         self.conn.close()
 
-    # Return [(timestamp0, message0), (timestamp1, message1), ...]
-    def get_messages(self, topic_name):
+    def load_topics(self):
+        topics_data = self.cursor.execute("SELECT id, name, type FROM topics").fetchall()
+        self.topic_type = {name: type for id, name, type in topics_data}
+        self.topic_id = {name: id for id, name, type in topics_data}
+        self.topic_msg_message = {name: get_message(type) for id, name, type in topics_data}
+
+    def get_messages(self, topic_name: str):
         topic_id = self.topic_id[topic_name]
-        # Get from the db
-        rows = self.cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = {}".format(topic_id)).fetchall()
-        # Deserialise all and timestamp them
-        return [ (timestamp,deserialize_message(data, self.topic_msg_message[topic_name])) for timestamp,data in rows]
-    
-    # Return [(timestamp0, message0)] at time_stamp
-    def get_msg_frame(self, topic_name, timestamp, duration=5e6):
+        rows = self.cursor.execute(f"SELECT timestamp, data FROM messages WHERE topic_id = {topic_id}").fetchall()
+        return [(timestamp, deserialize_message(data, self.topic_msg_message[topic_name])) for timestamp, data in rows]
+
+    def get_msg_frame(self, topic_name: str, timestamp: int):
         topic_id = self.topic_id[topic_name]
-        try:
-            rows = self.cursor.execute("SELECT timestamp, data FROM messages WHERE topic_id = {} AND ABS(timestamp - {}) < 5E8".format(topic_id, timestamp)).fetchall()
-            return (rows[round(len(rows)/2)][0], deserialize_message(rows[round(len(rows)/2)][1], self.topic_msg_message[topic_name])) # get the middle data from rows.# round(len(rows)/2)
-        except TypeError as e:
-            print(f"Error: {e}")
-            return None
-        # Deserialise all and timestamp them
+        rows = self.cursor.execute(f"SELECT timestamp, data FROM messages WHERE topic_id = {topic_id} AND ABS(timestamp - {timestamp}) < 5E8").fetchall()
+        if rows:
+            return (rows[round(len(rows)/2)][0], deserialize_message(rows[round(len(rows)/2)][1], self.topic_msg_message[topic_name]))
+        return None
 
 '''
 Load .mcap ros2bag file 
 '''
-class mcapParser():
-    def __init__(self, file:str) -> None:
-        self.reader =  make_reader(open(file, "rb"))
-    
-    def get_messages(self, topic_name:str, start_time=None, end_time=None):
-        print(f"extract messages: {topic_name}")
-        reader = self.reader
-        messages = []
-        if start_time is not None and end_time is not None:
-            for msg in reader.iter_messages(topics=[topic_name], start_time=start_time, end_time=end_time):
-                topic = deserialize_message(msg[2].data, get_message(msg[0].name))
-                timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
-                messages.append([timestamp, topic])
-        else:
-            for msg in reader.iter_messages(topics=[topic_name]):
-                topic = deserialize_message(msg[2].data, get_message(msg[0].name))
-                timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
-                messages.append([timestamp, topic])
-                #print(timestamp)
-        
-        if len(messages) == 0:
-            print("No message found")
-            return None
-        else:
-            print(f"get_messages: {len(messages)}")
-            return messages
+class McapParser:
+    def __init__(self, bag_file: str, duration: int = 1e12):
+        self.reader = make_reader(open(bag_file, "rb"))
+        self.duration = duration
 
-    def get_msg_frame(self, topic_name:str, timestamp, duration=1e12):
-        # print(f"get_msg_frame: {topic_name}")
-        reader = self.reader
+    def get_messages(self, topic_name: str, start_time=None, end_time=None):
         messages = []
-        for msg in reader.iter_messages(topics=[topic_name], start_time=timestamp - duration/2, end_time=timestamp + duration/2):
+        for msg in self.reader.iter_messages(topics=[topic_name], start_time=start_time, end_time=end_time):
+            topic = deserialize_message(msg[2].data, get_message(msg[0].name))
+            timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
+            messages.append([timestamp, topic])
+        return messages if messages else None
+
+    def get_msg_frame(self, topic_name: str, timestamp):
+        messages = []
+        for msg in self.reader.iter_messages(topics=[topic_name], start_time=timestamp - self.duration / 2, end_time=timestamp + self.duration / 2):
             topic = deserialize_message(msg[2].data, get_message(msg[0].name))
             cur_timestamp = topic.header.stamp.sec * 1e9 + topic.header.stamp.nanosec
             messages.append([cur_timestamp, topic])
-        print(f"{topic_name}: {len(messages)}")
-        if len(messages) == 0:
-            return None
-        return messages[math.floor(len(messages)/2)]
+        return messages[math.floor(len(messages) / 2)] if messages else None
 
 '''
 data frame from a parser
 '''
 class Frame():
-    def __init__(self, parser, timestamp) -> None:
+    def __init__(self, parser, timestamp, ) -> None:
         try: 
             self.timestamp = timestamp
 
@@ -167,7 +147,7 @@ class Frame():
             self.cam_rear  = parser.get_msg_frame("/CameraRear", timestamp)
 
             self.ori = parser.get_msg_frame("/imu/data", timestamp) #ori[times]
-            self.gps_pos = parser.get_msg_frame("/sbg/gps_pos", timestamp) # gps_pos[ts][1].position.SLOT_TYPES.x
+            self.gps_pos = parser.get_msg_frame("/sbg/gps_pos", timestamp)
             self.gps_vel = parser.get_msg_frame("/sbg/gps_vel", timestamp)
 
             # self.battery_percent = parser.get_messages("/battery_percent")
@@ -179,67 +159,6 @@ class Frame():
         except TypeError as e:
             print(f"Error: {e}")
             return None
-        
-    def generate_report(self, abs_path:str):
-        '''
-        [ ] merge this function into Class Report
-        '''
-        # Data from the autonomous shuttle bus
-        date_time = "2024-10-04 14:30:00"  # Example date and time
-        gps_location = "Latitude: -31.9505, Longitude: 115.8605"  # Example GPS location
-        front_image_path = "./unittest_file/gt/front.png"  
-        front_pcd_path = "./unittest_file/gt/velodyne_front.png"  
-        rear_image_path = "./unittest_file/gt/rear.png"   
-        rear_pcd_path = "./unittest_file/gt/velodyne_rear.png"
-        # Data for the report
-        date_time = "2024-10-04 14:30:00"  # Example date and time
-        path_html = "./unittest_file/gt/waypoints_and_stops.html"  # Example path HTML file
-        path_explanation = "This image shows the overall path taken by the shuttle."  # Input your path explanation
-
-        # Incident data (you can add more incidents as needed)
-        incidents = [
-            {
-                "gps": "Latitude: -31.9505, Longitude: 115.8605",
-                "date_time": "2024-10-04 14:35:00",
-                "front_camera": front_image_path,
-                "front_lidar": front_pcd_path,
-                "rear_camera": rear_image_path,
-                "rear_lidar": rear_pcd_path,
-                "front_explanation": "This is the front camera view during the incident.",
-                "rear_explanation": "This is the rear camera view during the incident.",
-            },
-            {
-                "gps": "Latitude: -31.9525, Longitude: 115.8625",
-                "date_time": "2024-10-04 14:40:00",
-                "front_camera": front_image_path,
-                "front_lidar": front_pcd_path,
-                "rear_camera": rear_image_path,
-                "rear_lidar": rear_pcd_path,
-                "front_explanation": "This is the front camera view during the incident.",
-                "rear_explanation": "This is the rear camera view during the incident.",
-            }
-        ]
-
-        # Create a basic environment for the HTML report template
-        env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template('report_template.html')
-
-        # Render the template with the data
-        html_content = template.render(
-            date_time=date_time,
-            path_html=path_html,
-            path_explanation=path_explanation,
-            incidents=incidents
-        )
-
-        # Write the HTML content to a file (optional for debugging)
-        with open('report.html', 'w') as file:
-            file.write(html_content)
-
-        # Convert the HTML report to PDF
-        pdfkit.from_file('report.html', 'autonomous_shuttle_report.pdf')
-
-        print("Report generated: autonomous_shuttle_report.pdf")
     
     def print_time(self, timestamp, name:str): 
         try:
@@ -290,11 +209,14 @@ class Frame():
         print("Battery voltage: ", self.battery_voltage[1].data)
         return [self.battery_percent[1].data, self.battery_voltage[1].data]
 
-    def save_camera_image(self, abs_path:str):
+    def save_camera_image(self, out_dir:str):
         bridge = CvBridge()
         if self.cam_front is not None:
-            cv_img_front = bridge.imgmsg_to_cv2(self.cam_front[1], desired_encoding='passthrough')
-            front_output_path = os.path.join(abs_path, 'front.png')
+            cv_img_front = bridge.imgmsg_to_cv2(
+                self.cam_front[1], 
+                desired_encoding='passthrough'
+                )
+            front_output_path = os.path.join(out_dir, 'front.png')
             cv2.imwrite(front_output_path, cv_img_front)
             print("Image saved: front")
         else:
@@ -302,8 +224,11 @@ class Frame():
             print("No front camera data")
         
         if self.cam_rear is not None:
-            cv_img_rear = bridge.imgmsg_to_cv2(self.cam_rear[1], desired_encoding='passthrough')
-            rear_output_path = os.path.join(abs_path, 'rear.png')
+            cv_img_rear = bridge.imgmsg_to_cv2(
+                self.cam_rear[1], 
+                desired_encoding='passthrough'
+                )
+            rear_output_path = os.path.join(out_dir, 'rear.png')
             cv2.imwrite(rear_output_path, cv_img_rear)
             print("Image saved: rear")
         else:
@@ -383,20 +308,15 @@ class Map:
         if path_waypoints is not None:
             self.path = path_waypoints
         elif bus_frame is not None:
-            self.path = [[bus_frame.gps_pos[1].longitude, bus_frame.gps_pos[1].latitude]]
-            #self.path = [sublist for sublist in orin_path if all(range_min <= item <= range_max for item in sublist)]
+            self.path = [[bus_frame.gps_pos[1].longitude, 
+                          bus_frame.gps_pos[1].latitude]]
 
         if incident_waypoints is not None:
             self.stop = incident_waypoints
         else:
             self.stop = None
         
-        # self.path = np.array(self.path)
-        # self.path = self.path[(self.path[:, 0] > -35) & 
-        #                       (self.path[:, 0] < -30) & 
-        #                       (self.path[:, 1] > 110) & 
-        #                       (self.path[:, 1] < 120)]
-        self.pic_center = np.mean(self.path, 0) # [ ] change the map center
+        self.pic_center = np.mean(self.path, 0) 
         self.output_path = output_path
         self.map = folium.Map(location = [-31.595436, 115.662379], 
                               zoom_start = self.zoom_start) # -31.595436, 115.662379 for Eglinton
@@ -428,7 +348,10 @@ class Map:
         # else: self.pic_center at UWA
 
         icon_path = os.path.join(os.getcwd(),"output/demo-ori.png")
-        icon = folium.features.CustomIcon(icon_image=icon_path ,icon_size=(bus_w//20, bus_h//20))
+        icon = folium.features.CustomIcon(
+            icon_image=icon_path,
+            icon_size=(bus_w//20, bus_h//20)
+            )
         folium.Marker(gps_pos, icon=icon).add_to(self.map)
 
     def draw_path(self):
@@ -465,7 +388,14 @@ class Map:
             csv_path = os.path.splitext(self.output_path)[0]+'_inc.csv'
         else:
             csv_path = os.path.splitext(self.output_path)[0]+'_gps.csv'
-        np.savetxt(csv_path, self.path, delimiter=',', fmt='%s', header="Latitude,Longitude", comments='')
+        np.savetxt(
+            csv_path, 
+            self.path, 
+            delimiter=',', 
+            fmt='%s', 
+            header="Latitude,Longitude", 
+            comments=''
+            )
         return csv_path
 
 
@@ -486,55 +416,206 @@ class Map:
 Gnereate report based on Map() and Frame()
 '''
 class Report():
-    def __init__(self, 
-                 template_html : str = None):
-        self.template_path = template_html
-        self.history_path = Map()
+    def __init__(
+        self, 
+        waypoint_rosbag_pathname : str,
+        stop_rosbag_pathname : str, 
+        output_dir : str,
+        report_template_pathname : str = "./", 
+        ):
+        
+        self.template_path = report_template_pathname
+        self.waypoint_rosbag_pathname = waypoint_rosbag_pathname
+        self.stop_rosbag_pathname = stop_rosbag_pathname
+        self.output_dir = output_dir
+        # [self.waypoint_map, 
+        #  self.waypoint_pathname] = self.__add_map_from_rosbag(waypoint_rosbag_pathname,
+        #                                                       stop_rosbag_pathname,
+        #                                                       output_dir)
         self.history_path_content = "This image shows the overall path taken by the shuttle."
-        self.stops_dict = []
-        self.stops_data = [] # list of Frame()
+        self.stops_content = [] 
+        self.stops_data = [] 
         # extract path 
 
-    def add_map_from_csv(self, path : str):
+    def __add_map_from_csv(
+            self, path : str) -> list[Map, str]:
         # update self.history_path
         pass
         
-    def add_map_from_rosbag(self, path_rosbag : BagFileParserFactory):
+    def __add_map_from_rosbag(
+            self, 
+            waypoint_rosbag_pathname : str,
+            stop_rosbag_pathname : str, 
+            output_dir : str
+            )->list[Map, str]:
         # update self.history_path
-        pass
+        # output_dir = os.path.join(output_dir, "map.html")
+        waypoints = extract_rosbag_path(waypoint_rosbag_pathname, "/sbg/gps_pos")
+        stops = extract_rosbag_path(stop_rosbag_pathname, "/sbg/gps_pos")
+        # output_path = "./unittest_file/output/test_two_bag2html.html"
+        map = Map(17,
+                  output_path=output_dir,
+                  path_waypoints=waypoints,
+                  incident_waypoints=stops)
+        map.draw_path()
+        map_pathname = map.save_html_map()
+        return [map, map_pathname]
 
-    def add_incident_from_rosbag(self, stop_rosbag : BagFileParserFactory):
-        # return a list of incident Frames. Called by add_incident
-        pass
+    def add_image_explanation(self, image_pathname:str, type:str):
+        # image messages
+        if type != "front" and type != "rear":
+            return None
+        
+        system_prompt = """RAW TEXT ONLY. Using the provided front/rear camera images from an autonomous shuttle, generate a detailed disengagement description paragraph. Focus on the following points:
+Use one sentence to analyze the visible environment, including any relevant road conditions, traffic (moving or stationary vehicles), pedestrians, and obstacles.
+Use one sentence to describe the surrounding infrastructure (buildings, fences, signage) and road features (lanes, intersections, roundabouts).
+Use one sentence Identify visible weather conditions (cloud cover, rain, etc.) and assess their potential impact on visibility or driving conditions.
+Based on the scene, use two sentence to hypothesize possible reasons for system disengagement or manual intervention.
+Specify if the image is from the front or rear camera to ensure proper context."""
+        
+        text = "this is the " + type + " camera image, generate a detailed disengagement description."
 
-    def add_explanation(self):
-        # llm inference images and lidars
-        pass
+        def encode_image(image_pathname):
+            with open(image_pathname, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
 
-    def add_incident(self, data : Frame):
+        messages = [
+            {
+            "role": "user",
+            "content": [
+                {
+                "type": "text",
+                "text": str(system_prompt + text)
+                },
+                {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{encode_image(image_pathname)}"
+                }
+                }
+            ]
+            }
+        ]
+
+
+        # send prompt to llm
+
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+        try:
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+            )
+            usage = response.usage
+            content = response.choices[0].message.content
+            return content
+        except Exception as e:
+            error_str = "Unable to generate ChatCompletion response, check your api."
+            print(error_str)
+            print(f"Exception: {e}")
+            return error_str
+
+
+    def __get_incident_data(self, stop_rosbag_pathname : str) -> list[Frame]:
         '''
+        - input a rosbag pathname, return a Frame list. Update self.stops_data
+        '''
+        try: 
+            bag_parser = BagFileParserFactory(stop_rosbag_pathname,duration=1e10)
+        except IOError:
+            print ('Cannot open file: ' 
+                   + stop_rosbag_pathname 
+                   + ', please check the rosbag file path')
+
+        # get the timestamp list from gps_pos topic
+        gps_list = bag_parser.get_parser().get_messages("/CameraFront")
+        timestamps = [gps_list[i][0] for i in range(len(gps_list))]
+        stop_timestamps = self.__estimate_incident_times(timestamps, 50) # 10 seconds
+
+        for ts in stop_timestamps:
+            stop = Frame(bag_parser.get_parser(), ts)
+            self.stops_data.append(stop)
+
+        return self.stops_data
+
+    def __estimate_incident_times(self, timestamps:int, window_width:int) -> list[int]:
+        '''
+        - Estimate incident timestamps using snapshot rosbag and window width.
+        - Methods
+            - Sort the timestamp list
+            - Group them with given window width
+            - Return the last timestamp in each group.
+        - Only called by self.__get_incident_data(...)
+        '''
+        # Convert input float timestamps to datetime objects (assuming they are in nanoseconds)
+        timestamps = [datetime.datetime.fromtimestamp(ts / 1e9) for ts in timestamps]
+        
+        # Sort the timestamps in ascending order
+        timestamps.sort()
+
+        # Initialize variables
+        groups = []
+        current_group = []
+        group_start = timestamps[0]
+
+        # Group timestamps according to the window duration
+        for ts in timestamps:
+            if (ts - group_start).total_seconds() <= window_width:
+                current_group.append(ts)
+            else:
+                # Store the last timestamp of the group
+                last_timestamp = current_group[-1]
+                groups.append(last_timestamp)
+
+                # Start a new group
+                current_group = [ts]
+                group_start = ts
+        
+        # Handle the last group
+        if current_group:
+            last_timestamp = current_group[-1]
+            groups.append(last_timestamp)
+        
+        # Convert the last timestamps back to float format (nanoseconds)
+        groups = [int(dt.timestamp() * 1e9) for dt in groups]
+
+        return groups
+
+    def __extract_incident_frame(
+            self, 
+            data : Frame, 
+            index : int) -> dict[str, str]:
+        '''
+        - Extract sensors data from given Frame  
+        - Save them to output_dir/stop_<index>
+        - Return a dictionary includes the pathnames
+        - Called by self.generate_report(...) iteratively with __group_timestamps()
+
         required data: timestamp, gps_pos, image, pcd, explanation
         {
-            "gps": "Latitude: -31.9505, Longitude: 115.8605",
-            "date_time": "2024-10-04 14:35:00",
-            "front_camera": front_image_path,
-            "front_lidar": front_pcd_path,
-            "rear_camera": rear_image_path,
-            "rear_lidar": rear_pcd_path,
-            "front_explanation": "This is the front camera view during the incident.",
+            "gps": "Latitude: -31.9505, Longitude: 115.8605",  
+            "date_time": "2024-10-04 14:35:00",  
+            "front_camera": front_image_path,  
+            "front_lidar": front_pcd_path,  
+            "rear_camera": rear_image_path,  
+            "rear_lidar": rear_pcd_path,  
+            "front_explanation": "This is the front camera view during the incident.",  
             "rear_explanation": "This is the rear camera view during the incident.",
         }
         '''
-        output_path = os.path.dirname(os.path.abspath(__file__))
+        out_pathname = os.path.join(self.output_dir, "stop_"+str(index))
+        os.makedirs(out_pathname, exist_ok=True)
 
-        [front_cam, rear_cam] = data.save_camera_image()
+        [front_cam, rear_cam] = data.save_camera_image(out_pathname)
 
-        rear_pcd = data.save_pcd2png(output_path, data.vld_rear[1], "velodyne_rear")
-        front_pcd = data.save_pcd2png(output_path, data.vld_front[1], "velodyne_front")
+        rear_pcd = data.save_pcd2png(out_pathname, data.vld_rear[1], "velodyne_rear")
+        front_pcd = data.save_pcd2png(out_pathname, data.vld_front[1], "velodyne_front")
 
-        # [ ] use add_explanation
-        front_exp = "This is the front camera view during the incident."
-        rear_exp = "This is the rear camera view during the incident."
+        # [ ] Add inference add_explanation
+        front_exp = self.add_image_explanation(front_cam, "front")
+        rear_exp = self.add_image_explanation(rear_cam, "rear")
 
         out = {
                 "gps": f"Latitude: {data.gps_pos[1].latitude:.5f}, Longitude: {data.gps_pos[1].longitude:.5f}",
@@ -546,35 +627,39 @@ class Report():
                 "front_explanation": front_exp,
                 "rear_explanation": rear_exp,
             }
-        self.stops_dict.append(out)
+        self.stops_content.append(out)
+        return out
 
-    def generate_report(self):
+    def generate_report(self) -> None:
         # generate the report based on the template, and src files
-
-        #
-        self.add_map_from_rosbag()
+        map_pathname = os.path.join(os.path.dirname(os.path.abspath(__file__)), "map.html")
+        [_, map_pathname] = self.__add_map_from_rosbag(
+                                self.waypoint_rosbag_pathname, 
+                                self.stop_rosbag_pathname, 
+                                map_pathname
+                                )
+        
+        self.__get_incident_data(self.stop_rosbag_pathname)
 
         for stop in self.stops_data:
-            self.add_incident(stop)
+            self.__extract_incident_frame(stop, self.stops_data.index(stop))
+            time.sleep(0.5)
 
-    
         # Create a basic environment for the HTML report template
-        env = Environment(loader=FileSystemLoader('.'))
+        env = Environment(loader=FileSystemLoader('./resources'))
         template = env.get_template('report_template.html')
 
         # [ ] Render the template with the data
         html_content = template.render(
-            # date_time=self.history_path.time_str, based on map rosbag
-            # path_html=self.history_path, based on map
-            # path_explanation=self.history_path_content, based on map
-            # incidents=self.stops_dict # based on stops_data
+            date_time='00-00-00', 
+            path_html=map_pathname, 
+            path_explanation=self.history_path_content,
+            incidents=self.stops_content # based on stops_data
         )
 
         # Write the HTML content to a file (optional for debugging)
         with open('report.html', 'w') as file:
             file.write(html_content)
-
-        pass
 
     def save_report(self, output_path : str):
         pass

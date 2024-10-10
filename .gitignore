@@ -138,3 +138,5 @@ rosbag_plot/output*
 rosbag_plot/bus_icon*
 unittest_file/gt/*
 unittest_file/output/*
+
+/resources/*
