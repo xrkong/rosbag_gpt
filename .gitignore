@@ -130,13 +130,10 @@ dmypy.json
 *.xcf
 *.html
 *.kml
-csv_plot/popup_image/
-csv_plot/stop_gps.csv
-output/*
-rosbag_plot/output*
-.vscode/launch.json
-rosbag_plot/bus_icon*
-unittest_file/gt/*
-unittest_file/output/*
 
-/resources/*
+# output files
+output/
+.vscode/*
+unittest/fixture/
+unittest/output/*
+.vscode/settings.json

@@ -1,35 +1,34 @@
-import unittest
-from plot_ros2bag import * 
-from sensor_msgs.msg import Image
-import pdfkit
-from PIL import Image
-from jinja2 import Environment, FileSystemLoader
 import os
-import datetime
-import numpy as np
+import unittest
+
 from skimage.metrics import structural_similarity as ssim
+from src.bag_parser import *
+from src.path_map import *
+from src.frame import *
+from src.report import *
+from src.utils import *
 
 # ground truth
-GT_MCAP_STOPS = "./unittest_file/gt/rosbag2_2024_09_03-10_05_53_stops/rosbag2_2024_09_03-10_05_53_0.mcap"
-GT_MCAP_WAYPOINTS = "./unittest_file/gt/rosbag2_2024_09_03-10_05_53_waypoints/rosbag2_2024_09_03-10_05_53_0.mcap"
-GT_MCAP_RAW = "./unittest_file/gt/rosbag2_2024_09_03-10_06_24_raw/rosbag2_2024_09_03-10_06_24_0.mcap"
-GT_MCAP_FAKE = "/home/kong/fake_rosbag.mcap" # doesn't exist
+GT_MCAP_STOPS = "./unittest/fixture/rosbag2_2024_09_03-10_05_53_stops/rosbag2_2024_09_03-10_05_53_0.mcap"
+GT_MCAP_WAYPOINTS = "./unittest/fixture/rosbag2_2024_09_03-10_05_53_waypoints/rosbag2_2024_09_03-10_05_53_0.mcap"
+GT_MCAP_RAW = "./unittest/fixture/rosbag2_2024_09_03-10_06_24_raw/rosbag2_2024_09_03-10_06_24_0.mcap"
+GT_MCAP_FAKE = "./fake_rosbag.mcap" # doesn't exist
 
-GT_CSV_WAYPOINTS = "./unittest_file/gt/waypoints.csv"
-GT_CSV_STOPS = "./unittest_file/gt/stops.csv"
+GT_CSV_WAYPOINTS = "./unittest/fixture/waypoints.csv"
+GT_CSV_STOPS = "./unittest/fixture/stops.csv"
 
-GT_HTML_WAYPOINTS_STOPS = "./unittest_file/gt/waypoints_and_stops.html"
-GT_HTML_WAYPOINTS = "./unittest_file/gt/waypoints.html"
-GT_HTML_STOPS = "./unittest_file/gt/stops.html"
+GT_HTML_WAYPOINTS_STOPS = "./unittest/fixture/waypoints_and_stops.html"
+GT_HTML_WAYPOINTS = "./unittest/fixture/waypoints.html"
+GT_HTML_STOPS = "./unittest/fixture/stops.html"
 
-GT_PNG_FRONT = "./unittest_file/gt/front.png"
-GT_PNG_REAR = "./unittest_file/gt/rear.png"
-GT_PNG_VLD_FRONT = "./unittest_file/gt/velodyne_front.png"
-GT_PNG_VLD_REAR = "./unittest_file/gt/velodyne_rear.png"
-GT_PCD_VLD_FRONT = "./unittest_file/gt/velodyne_front.pcd"
-GT_PCD_VLD_REAR = "./unittest_file/gt/velodyne_rear.pcd"
+GT_PNG_FRONT = "./unittest/fixture/front.png"
+GT_PNG_REAR = "./unittest/fixture/rear.png"
+GT_PNG_VLD_FRONT = "./unittest/fixture/velodyne_front.png"
+GT_PNG_VLD_REAR = "./unittest/fixture/velodyne_rear.png"
+GT_PCD_VLD_FRONT = "./unittest/fixture/velodyne_front.pcd"
+GT_PCD_VLD_REAR = "./unittest/fixture/velodyne_rear.pcd"
 
-OUTPUT = "./unittest_file/output"
+OUTPUT = "./unittest/output"
 
 class TestUtils(unittest.TestCase):
     '''
@@ -97,7 +96,7 @@ class TestUtils(unittest.TestCase):
         self.assertIs(type(image[0]), float)
         self.assertIs(type(image[1]), sensor_msgs.msg.Image)
 
-class TestMap(unittest.TestCase):
+class TestPathMap(unittest.TestCase):
     '''
     - Input a rosbag and gps topic name, retun a html path file.
     - Input a rosbag and gps topic name, retun a csv path file.
@@ -107,8 +106,8 @@ class TestMap(unittest.TestCase):
     '''
     def test_pathbag2csv(self):
         path = extract_rosbag_path(GT_MCAP_WAYPOINTS, "/sbg/gps_pos")
-        output = "./unittest_file/output/test_pathbag2csv.csv"
-        map = Map(17,
+        output = os.path.join(OUTPUT, "test_pathbag2csv.csv")
+        map = PathMap(17,
                   output_path=output, 
                   path_waypoints=path)
         save_path = map.save_csv_map()
@@ -120,8 +119,8 @@ class TestMap(unittest.TestCase):
         
     def test_pathbag2html(self):
         path = extract_rosbag_path(GT_MCAP_WAYPOINTS, "/sbg/gps_pos")
-        output = "./unittest_file/output/test_pathbag2html.html"
-        map = Map(17,
+        output = os.path.join(OUTPUT, "test_pathbag2html.html")
+        map = PathMap(17,
                   output_path=output, 
                   path_waypoints=path)
         map.draw_path()
@@ -133,8 +132,8 @@ class TestMap(unittest.TestCase):
     
     def test_stops_bag2html(self):
         path = extract_rosbag_path(GT_MCAP_STOPS, "/sbg/gps_pos")
-        output = "./unittest_file/output/test_stops_bag2html.html"
-        map = Map(17,
+        output = os.path.join(OUTPUT, "test_stops_bag2html.html")
+        map = PathMap(17,
                   output_path=output, 
                   incident_waypoints=path) 
         map.draw_path()
@@ -147,9 +146,9 @@ class TestMap(unittest.TestCase):
     def test_two_bag2html(self):
         waypoints = extract_rosbag_path(GT_MCAP_WAYPOINTS, "/sbg/gps_pos")
         stops = extract_rosbag_path(GT_MCAP_STOPS, "/sbg/gps_pos")
-        output_path = "./unittest_file/output/test_two_bag2html.html"
-        map = Map(17,
-                  output_path=output_path,
+        output = os.path.join(OUTPUT, "test_two_bag2html.html")
+        map = PathMap(17,
+                  output_path=output,
                   path_waypoints=waypoints,
                   incident_waypoints=stops)
         map.draw_path()
@@ -161,8 +160,8 @@ class TestMap(unittest.TestCase):
     def test_two_csv2html(self):
         waypoint = extract_csv_path(GT_CSV_WAYPOINTS)
         stops = extract_csv_path(GT_CSV_STOPS)
-        output_path = "./unittest_file/output/test_two_csv2html.html"
-        map = Map(17,
+        output_path = os.path.join(OUTPUT, "test_two_csv2html.html")
+        map = PathMap(17,
                   output_path=output_path,
                   path_waypoints=waypoint,
                   incident_waypoints=stops)
@@ -175,8 +174,8 @@ class TestMap(unittest.TestCase):
 
     def test_csv2html(self):
         path_wp = extract_csv_path(GT_CSV_WAYPOINTS)
-        output_path = "./unittest_file/output/test_csv2html.html"
-        map = Map(17, 
+        output_path = os.path.join(OUTPUT, "test_csv2html.html")
+        map = PathMap(17, 
                   output_path=output_path, 
                   path_waypoints=path_wp)
         map.draw_path()
@@ -250,8 +249,8 @@ class TestSensors(unittest.TestCase):
 
         frame_data = Frame(self.parser.get_parser(), timestamp=self.timstamp)
         output = frame_data.save_pcd2png(OUTPUT, 
-                                       frame_data.vld_rear[1], 
-                                       "velodyne_rear")
+                                         frame_data.vld_rear[1], 
+                                         "velodyne_rear")
 
         gt = cv2.imread(GT_PNG_VLD_REAR, cv2.IMREAD_GRAYSCALE)
         out = cv2.imread(output, cv2.IMREAD_GRAYSCALE)
@@ -278,12 +277,12 @@ class TestReport(unittest.TestCase):
         - [x] GPS location
         - [ ] Weather condition based on the location and time
         - [x] Front and rear camera images
-        - [ ] Front and rear velodyne point cloud data
+        - [x] Front and rear velodyne point cloud data
         - [ ] Images analysis (e.g. object detection, lane detection)
         '''
         report = Report(GT_MCAP_WAYPOINTS, 
                         GT_MCAP_STOPS, 
-                        "./resources/", 
+                        OUTPUT, 
                         "./resources/report_template.html")
         
         report.generate_report()
@@ -296,7 +295,7 @@ class TestReport(unittest.TestCase):
         '''
         report = Report(GT_MCAP_WAYPOINTS, 
                         GT_MCAP_STOPS, 
-                        "./resources/", 
+                        OUTPUT, 
                         "./resources/report_template.html")
         
         content = report.add_image_explanation(GT_PNG_FRONT, "front")

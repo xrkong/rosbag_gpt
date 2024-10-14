@@ -19,12 +19,6 @@ $ git clone git@github.com:xrkong/rosbag_plot.git
 $ python plot_ros2bag -h
 ```
 
-
-## Plot Path
-![Plot path and stops from rosbag](./document/path_demo.png)
-
-## Plot Snapshot
-![Plot snapshot from rosbag](./document/snapshot_demo.png)
 # Roadmap
 
 - [x] Deserialize from ros2 bag, (.db3 file)
