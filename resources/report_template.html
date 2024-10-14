@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Shuttle Incident Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .subsection {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        .image-container {
+            text-align: center;
+            margin: 10px 0;
+        }
+        .image-row {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        .image-row img {
+            max-width: 150%;
+            margin: 0 10px;
+        }
+        img {
+            height: auto;
+        }
+        h1, h2, h3 {
+            border-bottom: 2px solid #000;
+            padding-bottom: 5px;
+        }
+        p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Autonomous Shuttle Bus Incident Report</h1>
+    </div>
+
+    <!-- Section 1: Overall Path -->
+    <div class="section">
+        <h2>Section 1: Overall Path</h2>
+        <div class="image-container">
+            <iframe src="{{ path_html }}"  width="80%" height="800px" style="border:none;"></iframe>
+        </div>
+        <p>{{ path_explanation }}</p>
+    </div>
+
+    <!-- Section 2: Incident Report -->
+    <div class="section">
+        <h2>Section 2: Incident Report</h2>
+        {% for incident in incidents %}
+            <div class="subsection">
+                <h3>Incident at {{ incident.date_time }}</h3>
+                <p><strong>Location:</strong> {{ incident.gps_location }}</p>
+                <p><strong>Date and Time:</strong> {{ incident.date_time }}</p>
+
+                <!-- Front Camera and LiDAR images -->
+                <div class="image-row">
+                    <div>
+                        <img src="{{ incident.front_camera }}" alt="Front Camera" style="width: 832px; height: 520px;">
+                    </div>
+                    <div>
+                        <img src="{{ incident.front_lidar }}" alt="Front LiDAR" style="width: 832px; height: 520px;">
+                    </div>
+                </div>
+                <p>{{ incident.front_explanation }}</p>
+
+                <!-- Rear Camera and LiDAR images -->
+                <div class="image-row">
+                    <div>
+                        <img src="{{ incident.rear_camera }}" alt="Rear Camera" style="width: 832px; height: 520px;">
+                    </div>
+                    <div>
+                        <img src="{{ incident.rear_lidar }}" alt="Rear LiDAR" style="width: 832px; height: 520px;">
+                    </div>
+                </div>
+                <p>{{ incident.rear_explanation }}</p>
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
