@@ -131,7 +131,13 @@ dmypy.json
 *.kml
 
 # output files
-unittest/fixture/*
+unittest/fixture/*.html
+unittest/fixture/*.csv
+unittest/fixture/*.png 
+unittest/fixture/*.jpg
+unittest/fixture/*.pcd
+unittest/fixture/ros*
+
 unittest/output/*.html
 unittest/output/*.csv
 unittest/output/*.png 
