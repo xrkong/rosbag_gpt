@@ -131,12 +131,12 @@ dmypy.json
 *.kml
 
 # output files
-.vscode/*.html
-.vscode/*.csv
-.vscode/*.png 
-.vscode/*.jpg
-.vscode/*.pcd
 unittest/fixture/*
-unittest/output/*
+unittest/output/*.html
+unittest/output/*.csv
+unittest/output/*.png 
+unittest/output/*.jpg
+unittest/output/*.pcd
+unittest/output/stop*
 .vscode/settings.json
 .vscode/launch.json
