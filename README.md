@@ -42,7 +42,8 @@ cd /yolov7
 ## Example Snippets
 
 ## Unittest 
-The unittest fixture files can be found at [xrkong/nuway_rosbag](https://huggingface.co/datasets/xrkong/nuway_rosbag)
+The unittest fixture files can be found at [xrkong/nuway_rosbag](https://huggingface.co/datasets/xrkong/nuway_rosbag).  
+Put the files under ```/unittest/fixture```
 
 ## Tutorial
 ```
