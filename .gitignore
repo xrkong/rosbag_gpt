@@ -133,6 +133,5 @@ dmypy.json
 # output files
 output/
 .vscode/*
-unittest/fixture/
 unittest/output/*
 .vscode/settings.json

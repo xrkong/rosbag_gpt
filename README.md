@@ -1,6 +1,8 @@
-# 🗺️ Plot rosbag NOW!
+<img src="resources/rosbaggpt.png" width="150" height="150"/>  
 
-A tool to visualise an autonomous vheicle data including path, lidar and camera from ros2bag files.
+# ROSBAG GPT
+
+Use LLM to analyze and visualize sensor data in rosbag and generate reports.
 
 # Supported Versions
 - ros version: foxy, humble
