@@ -30,29 +30,5 @@ $ python plot_ros2bag -h
 - [x] plot map
 
 # Unit test 
-## Utility function
-1. Input a file path, validate the rosbag file. If failed, throw an error. 
-1. Input a message list, check the message in the rosbag or not. 
-1. Input a topic name, extract the message list. 
-1. Input a topic name and a time stamp, return the closest message. 
 
-## Map & Path
-1. Input a rosbag and gps topic name, retun a html path file.
-1. Input a rosbag and gps topic name, retun a csv path file.
-1. Input a rosbag, regular gps topic name, and incident topic name, return a html incident path map.
-1. Input a regular rosbag, and a incident rosbag, return a html incident path map.
-1. Input two csv file (regular and incident), return a html incident path map. 
-<!-- 2. Save Point cloud and Images to local. -->
-<!-- 3. TODO. image and pcd will be inferenced by LLMs -->
-
-## Sensors
-1. Input a rosbag file and a timestamp, visualize pointcloud and images into a single file.
-1. Input a rosbag file and a timestamp, save pointcloud and images into a single file.
-1. Input a rosbag file, a timestamp, and a saving path, save all pointcloud and images to the saving path.
-1. Input a rosbag, a image topics, and a saving path, extract images to the given path.
-1. Input a rosbag, a pcd topics, and a saving path, extract point cloud files to the given path.
-
-
-## Inferences (TODO)
-1. Input a image, and a topic name, inference it.
 
