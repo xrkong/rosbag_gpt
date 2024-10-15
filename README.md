@@ -1,20 +1,48 @@
 <img src="resources/rosbaggpt.png" width="150" height="150"/>  
 
 # ROSBAG GPT
+![License](https://img.shields.io/github/license/ros2/rosbag2)
+![ROS2 Version](https://img.shields.io/badge/ROS2-Humble%20Hawksbill-brightgreen)
+![Issues](https://img.shields.io/github/issues/xrkong/rosbag_gpt)
+
+## Goal
 
 Use LLM to analyze and visualize sensor data in rosbag and generate reports.
 
-# Supported Versions
+## Features
 - ros version: foxy, humble
 - rosbag: ```mcap```, ```db3```
 - ros topic type: [```sensor_msgs/Image```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/Image.html), [```sbg_driver/SbgGpsPos```](http://docs.ros.org/en/api/sbg_driver/html/msg/SbgGpsPos.html), [```sensor_msgs/PointCloud2```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/PointCloud2.html), [```sensor_msgs/LaserScan```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/LaserScan.html)
+- gpt-4o
 
-# Quickstart
+
 
 ## Installation
+
+Docker environment (recommended)
+<details><summary> <b>Expand</b> </summary>
+
+``` shell
+# create the docker container
+nvidia-docker run --name yolov7 -it -v your_coco_path/:/coco/ -v your_code_path/:/yolov7 --shm-size=64g nvcr.io/nvidia/pytorch:21.08-py3
+
+# apt install required packages
+apt update
+apt install -y zip htop screen libgl1-mesa-glx
+
+# pip install required packages
+pip install seaborn thop
+
+# go to code folder
+cd /yolov7
 ```
-$ git clone git@github.com:xrkong/rosbag_plot.git
-```
+
+</details>
+
+## Example Snippets
+
+## Unittest 
+The unittest fixture files can be found at [xrkong/nuway_rosbag](https://huggingface.co/datasets/xrkong/nuway_rosbag)
 
 ## Tutorial
 ```
