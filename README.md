@@ -15,8 +15,6 @@ Use LLM to analyze and visualize sensor data in rosbag and generate reports.
 - ros topic type: [```sensor_msgs/Image```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/Image.html), [```sbg_driver/SbgGpsPos```](http://docs.ros.org/en/api/sbg_driver/html/msg/SbgGpsPos.html), [```sensor_msgs/PointCloud2```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/PointCloud2.html), [```sensor_msgs/LaserScan```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/LaserScan.html)
 - gpt-4o
 
-
-
 ## Installation
 
 Docker environment (recommended)
@@ -43,11 +41,14 @@ cd /yolov7
 
 ## Unittest 
 The unittest fixture files can be found at [xrkong/nuway_rosbag](https://huggingface.co/datasets/xrkong/nuway_rosbag).  
+```bash
+huggingface-cli download --repo-type dataset --local-dir ./unittest/fixture  xrkong/nuway_rosbag
+```
 Put the files under ```/unittest/fixture```
 
 ## Tutorial
 ```
-$ python plot_ros2bag -h
+python plot_ros2bag -h
 ```
 
 # Roadmap
