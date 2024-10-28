@@ -15,7 +15,7 @@ Use LLM to analyze and visualize sensor data in rosbag and generate reports.
 - ros topic type: [```sensor_msgs/Image```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/Image.html), [```sbg_driver/SbgGpsPos```](http://docs.ros.org/en/api/sbg_driver/html/msg/SbgGpsPos.html), [```sensor_msgs/PointCloud2```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/PointCloud2.html), [```sensor_msgs/LaserScan```](http://docs.ros.org/en/melodic/api/sensor_msgs/html/msg/LaserScan.html)
 - gpt-4o
 
-![https://github.com/xrkong/rosbag_gpt/blob/main/resources/report_generation.webm](https://github.com/xrkong/rosbag_gpt/blob/main/resources/report_generation.webm)
+[report_generation.webm](https://github.com/user-attachments/assets/0bb99378-3e2d-4075-9145-157609968325)
 
 ## Installation
 
