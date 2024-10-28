@@ -21,25 +21,15 @@ Use LLM to analyze and visualize sensor data in rosbag and generate reports.
 
 ## Installation
 
-Docker environment (recommended)
-<details><summary> <b>Expand</b> </summary>
+### Conda
 
-``` shell
-# create the docker container
-nvidia-docker run --name yolov7 -it -v your_coco_path/:/coco/ -v your_code_path/:/yolov7 --shm-size=64g nvcr.io/nvidia/pytorch:21.08-py3
+<!-- conda install -c conda-forge gcc=12.1.0 -->
 
-# apt install required packages
-apt update
-apt install -y zip htop screen libgl1-mesa-glx
-
-# pip install required packages
-pip install seaborn thop
-
-# go to code folder
-cd /yolov7
+```bash
+conda env create -n rosbag_gpt -f environment.yaml
+conda activate rosbag_gpt
+python3 demo.py
 ```
-
-</details>
 
 ## Example Snippets
 - **Exrtact specific topic messages from ros2bag**
@@ -59,9 +49,7 @@ huggingface-cli download --repo-type dataset --local-dir ./unittest/fixture  xrk
 Put the files under ```/unittest/fixture```
 
 ## Tutorial
-```
-python plot_ros2bag -h
-```
+please check the ```/unittest/test_unittest.py```
 
 # Roadmap
 
@@ -71,6 +59,5 @@ python plot_ros2bag -h
 - [x] If there is a icon of the vechicle, add into a middile.
 - [x] plot map
 
-# Unit test 
 
 

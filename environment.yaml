@@ -1,0 +1,47 @@
+name: rosbag_gpt
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=2_gnu
+  - binutils_impl_linux-64=2.40=h5293946_0
+  - bzip2=1.0.8=h5eee18b_6
+  - ca-certificates=2024.9.24=h06a4308_0
+  - gcc=12.1.0=h9ea6d83_10
+  - gcc_impl_linux-64=12.1.0=hea43390_17
+  - kernel-headers_linux-64=3.10.0=he073ed8_18
+  - ld_impl_linux-64=2.40=h12ee557_0
+  - libffi=3.4.4=h6a678d5_1
+  - libgcc=14.2.0=h77fa898_1
+  - libgcc-devel_linux-64=12.1.0=h1ec3361_17
+  - libgcc-ng=14.2.0=h69a702a_1
+  - libgomp=14.2.0=h77fa898_1
+  - libsanitizer=12.1.0=ha89aaad_17
+  - libstdcxx=14.2.0=hc0a3c3a_1
+  - libstdcxx-ng=14.2.0=h4852527_1
+  - libuuid=1.41.5=h5eee18b_0
+  - ncurses=6.4=h6a678d5_0
+  - openssl=3.3.2=hb9d3cd8_0
+  - pip=24.2=py310h06a4308_0
+  - python=3.10.15=he870216_1
+  - readline=8.2=h5eee18b_0
+  - setuptools=75.1.0=py310h06a4308_0
+  - sqlite=3.45.3=h5eee18b_0
+  - sysroot_linux-64=2.17=h4a8ded7_18
+  - tk=8.6.14=h39e8969_0
+  - tzdata=2024b=h04d1e81_0
+  - wheel=0.44.0=py310h06a4308_0
+  - xz=5.4.6=h5eee18b_1
+  - zlib=1.2.13=h5eee18b_1
+  - pip:
+      - certifi==2024.7.4
+      - distro==1.9.0
+      - idna==3.4
+      - lz4==4.3.3
+      - numpy==1.26.4
+      - six==1.16.0
+      - transforms3d==0.4.2
+      - urllib3==2.2.3
+      - zipp==3.19.2
+prefix: /home/kong/miniconda3/envs/rosbag_gpt

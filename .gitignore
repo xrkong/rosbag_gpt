@@ -146,3 +146,4 @@ unittest/output/*.pcd
 unittest/output/stop*
 .vscode/settings.json
 .vscode/launch.json
+output/*
