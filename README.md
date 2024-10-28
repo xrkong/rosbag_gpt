@@ -8,6 +8,7 @@
 ## Goal
 
 Use LLM to analyze and visualize sensor data in rosbag and generate reports.
+[report.webm](https://github.com/user-attachments/assets/eecf9b97-3d9c-46b4-97d9-c10d4ef185a8)
 
 ## Features
 - ros version: foxy, humble
