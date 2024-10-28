@@ -212,7 +212,9 @@ Specify if the image is from the front or rear camera to ensure proper context."
         front_pcd = frame.save_pcd2png(out_pathname, frame.vld_front[1], "velodyne_front")
 
         front_exp = self.add_image_explanation(front_cam, "front")
+        print("Front: "+front_exp)
         rear_exp = self.add_image_explanation(rear_cam, "rear")
+        print("Rear: "+rear_exp)
 
         timezone = pytz.timezone('Australia/Perth')
         dt_object = datetime.datetime.fromtimestamp(frame.timestamp/1e9, tz=timezone)
